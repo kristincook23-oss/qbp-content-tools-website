@@ -12,9 +12,9 @@
     --navy: #1a2035;
     --navy-light: #232d47;
     --navy-mid: #2a3555;
-    --orange: #d4531e;
-    --orange-hover: #b8451a;
-    --orange-light: rgba(212, 83, 30, 0.12);
+    --orange: #e8521a;
+    --orange-hover: #c94415;
+    --orange-light: rgba(232, 82, 26, 0.12);
     --white: #ffffff;
     --off-white: #f4f5f8;
     --text-muted: #8b95ae;
@@ -28,14 +28,30 @@
     background: var(--navy);
     color: var(--white);
     min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── BACKGROUND WHEEL TEXTURE ── */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(232,82,26,0.04) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
   }
 
   /* ── NAV ── */
   nav {
-    background: var(--navy-light);
+    background: rgba(26, 32, 53, 0.95);
+    backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     padding: 0 2.5rem;
-    height: 60px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -47,28 +63,20 @@
   .nav-brand {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
   }
 
   .nav-logo {
-    width: 36px;
-    height: 36px;
-    background: var(--orange);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 800;
-    font-size: 15px;
-    letter-spacing: -0.5px;
-    color: #fff;
+    height: 40px;
+    width: auto;
     flex-shrink: 0;
   }
 
   .nav-title {
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--white);
+    letter-spacing: -0.01em;
   }
 
   .nav-sub {
@@ -90,15 +98,13 @@
     padding: 4px 10px;
     background: var(--orange-light);
     color: var(--orange);
-    border: 1px solid rgba(212,83,30,0.25);
+    border: 1px solid rgba(232,82,26,0.25);
     border-radius: 20px;
     letter-spacing: 0.02em;
     margin-left: 8px;
   }
 
-  .dropdown {
-    position: relative;
-  }
+  .dropdown { position: relative; }
 
   .dropdown-btn {
     background: none;
@@ -122,14 +128,8 @@
     border-color: rgba(255,255,255,0.16);
   }
 
-  .dropdown-btn svg {
-    transition: transform 0.2s;
-    flex-shrink: 0;
-  }
-
-  .dropdown.open .dropdown-btn svg {
-    transform: rotate(180deg);
-  }
+  .dropdown-btn svg { transition: transform 0.2s; flex-shrink: 0; }
+  .dropdown.open .dropdown-btn svg { transform: rotate(180deg); }
 
   .dropdown-menu {
     display: none;
@@ -141,13 +141,11 @@
     border-radius: 12px;
     padding: 6px;
     min-width: 240px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
     z-index: 200;
   }
 
-  .dropdown.open .dropdown-menu {
-    display: block;
-  }
+  .dropdown.open .dropdown-menu { display: block; }
 
   .dropdown-section-label {
     font-size: 10px;
@@ -177,32 +175,12 @@
     cursor: pointer;
   }
 
-  .dropdown-item:hover {
-    background: rgba(255,255,255,0.07);
-  }
+  .dropdown-item:hover { background: rgba(255,255,255,0.07); }
 
-  .dropdown-item-icon {
-    font-size: 15px;
-    width: 20px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .dropdown-item-text {
-    flex: 1;
-  }
-
-  .dropdown-item-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--white);
-  }
-
-  .dropdown-item-sub {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 1px;
-  }
+  .dropdown-item-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+  .dropdown-item-text { flex: 1; }
+  .dropdown-item-name { font-size: 13px; font-weight: 500; color: var(--white); }
+  .dropdown-item-sub { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
 
   .placeholder-tag {
     font-size: 9px;
@@ -218,10 +196,18 @@
 
   /* ── HERO ── */
   .hero {
-    padding: 3.5rem 2.5rem 2.5rem;
+    position: relative;
     max-width: 1100px;
     margin: 0 auto;
+    padding: 4rem 2.5rem 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    overflow: hidden;
+    z-index: 1;
   }
+
+  .hero-text { flex: 1; min-width: 0; position: relative; z-index: 2; }
 
   .hero-eyebrow {
     font-size: 11px;
@@ -230,15 +216,27 @@
     text-transform: uppercase;
     color: var(--orange);
     margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .hero-eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 2px;
+    background: var(--orange);
+    border-radius: 2px;
   }
 
   .hero h1 {
-    font-size: clamp(28px, 4vw, 46px);
+    font-size: clamp(30px, 4vw, 50px);
     font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
     color: var(--white);
-    margin-bottom: 16px;
+    margin-bottom: 18px;
   }
 
   .hero h1 span { color: var(--orange); }
@@ -246,16 +244,31 @@
   .hero p {
     font-size: 16px;
     color: var(--text-muted);
-    max-width: 520px;
-    line-height: 1.6;
+    max-width: 480px;
+    line-height: 1.65;
+    margin-bottom: 2rem;
   }
 
   .hero-divider {
     width: 48px;
     height: 3px;
-    background: var(--orange);
-    margin: 2rem 0;
+    background: linear-gradient(90deg, var(--orange), transparent);
     border-radius: 2px;
+  }
+
+  /* Bike illustration container */
+  .hero-art {
+    flex-shrink: 0;
+    width: 340px;
+    opacity: 0.18;
+    position: relative;
+    pointer-events: none;
+  }
+
+  .hero-art svg {
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 0 40px rgba(232,82,26,0.3));
   }
 
   /* ── PAGE BODY ── */
@@ -267,6 +280,8 @@
     grid-template-columns: 1fr 320px;
     gap: 24px;
     align-items: start;
+    position: relative;
+    z-index: 1;
   }
 
   .main-col { display: flex; flex-direction: column; gap: 32px; }
@@ -292,14 +307,14 @@
   .tool-card {
     background: var(--navy-light);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     padding: 24px;
     text-decoration: none;
     color: inherit;
     display: flex;
     flex-direction: column;
     gap: 14px;
-    transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     cursor: pointer;
     position: relative;
     overflow: hidden;
@@ -310,29 +325,43 @@
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 3px;
-    background: var(--orange);
+    background: linear-gradient(90deg, var(--orange), rgba(232,82,26,0.4));
     opacity: 0;
-    transition: opacity 0.18s;
+    transition: opacity 0.2s;
+  }
+
+  .tool-card::after {
+    content: '';
+    position: absolute;
+    bottom: -30px; right: -30px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(232,82,26,0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.3s;
   }
 
   .tool-card:hover {
     background: var(--card-hover);
-    border-color: rgba(212, 83, 30, 0.3);
-    transform: translateY(-2px);
+    border-color: rgba(232, 82, 26, 0.35);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 0 1px rgba(232,82,26,0.1);
   }
 
   .tool-card:hover::before { opacity: 1; }
+  .tool-card:hover::after { opacity: 1; }
 
   .tool-icon {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     background: var(--orange-light);
-    border: 1px solid rgba(212, 83, 30, 0.2);
-    border-radius: 10px;
+    border: 1px solid rgba(232, 82, 26, 0.25);
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 19px;
+    font-size: 20px;
   }
 
   .tool-name {
@@ -343,11 +372,7 @@
     letter-spacing: -0.01em;
   }
 
-  .tool-desc {
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.55;
-  }
+  .tool-desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; }
 
   .tool-tags {
     display: flex;
@@ -372,19 +397,20 @@
     align-items: center;
     justify-content: space-between;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--orange);
     margin-top: auto;
+    letter-spacing: 0.01em;
   }
 
-  .tool-arrow svg { transition: transform 0.18s; }
-  .tool-card:hover .tool-arrow svg { transform: translateX(4px); }
+  .tool-arrow svg { transition: transform 0.2s; }
+  .tool-card:hover .tool-arrow svg { transform: translateX(5px); }
 
   /* ── ANNOUNCEMENTS ── */
   .announcements-card {
     background: var(--navy-light);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     overflow: hidden;
   }
 
@@ -394,6 +420,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    background: rgba(255,255,255,0.02);
   }
 
   .announcements-title {
@@ -441,50 +468,17 @@
     margin-bottom: 5px;
   }
 
-  .announcement-author {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--white);
-  }
+  .announcement-author { font-size: 11px; font-weight: 600; color: var(--white); }
+  .announcement-date { font-size: 11px; color: var(--text-muted); }
+  .pin-icon { font-size: 10px; color: var(--orange); }
 
-  .announcement-date {
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-
-  .pin-icon {
-    font-size: 10px;
-    color: var(--orange);
-  }
-
-  .announcement-text {
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.5;
-  }
-
-  .announcement-placeholder {
-    padding: 28px 20px;
-    text-align: center;
-  }
-
-  .announcement-placeholder p {
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.6;
-  }
-
-  .announcement-placeholder .placeholder-hint {
-    font-size: 11px;
-    color: rgba(139,149,174,0.5);
-    margin-top: 6px;
-  }
+  .announcement-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
 
   /* ── QUICK LINKS ── */
   .quick-links-card {
     background: var(--navy-light);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 16px;
     overflow: hidden;
   }
 
@@ -496,6 +490,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    background: rgba(255,255,255,0.02);
   }
 
   .quick-links-header span { font-size: 15px; }
@@ -513,7 +508,6 @@
   }
 
   .quick-link-item:last-child { border-bottom: none; }
-
   .quick-link-item:hover { background: rgba(255,255,255,0.04); }
 
   .quick-link-dot {
@@ -528,16 +522,10 @@
   .quick-link-dot.blue { background: #4a90d9; }
   .quick-link-dot.green { background: #4aad7c; }
   .quick-link-dot.purple { background: #8b7dd9; }
+  .quick-link-dot.muted { background: var(--text-muted); }
 
-  .quick-link-name {
-    flex: 1;
-    font-weight: 500;
-  }
-
-  .quick-link-ext {
-    color: var(--text-muted);
-    opacity: 0.5;
-  }
+  .quick-link-name { flex: 1; font-weight: 500; }
+  .quick-link-ext { color: var(--text-muted); opacity: 0.5; }
 
   /* ── FOOTER ── */
   footer {
@@ -546,10 +534,22 @@
     text-align: center;
     font-size: 12px;
     color: var(--text-muted);
+    position: relative;
+    z-index: 1;
+  }
+
+  .footer-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    opacity: 0.4;
   }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 900px) {
+    .hero-art { display: none; }
     .page-body { grid-template-columns: 1fr; }
     .side-col { flex-direction: row; flex-wrap: wrap; }
     .announcements-card, .quick-links-card { flex: 1; min-width: 280px; }
@@ -570,7 +570,17 @@
 <!-- ── NAV ── -->
 <nav>
   <div class="nav-brand">
-    <div class="nav-logo">Q</div>
+    <!-- QBP Q mark SVG logo -->
+    <svg class="nav-logo" viewBox="0 0 42 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Outer rounded rect -->
+      <rect x="2.5" y="2.5" width="31" height="38" rx="10" stroke="#E8521A" stroke-width="3.5" fill="none"/>
+      <!-- Inner rounded rect -->
+      <rect x="9" y="9" width="18" height="25" rx="6" stroke="#E8521A" stroke-width="3.5" fill="none"/>
+      <!-- Diagonal tail line 1 -->
+      <line x1="20" y1="27" x2="32" y2="47" stroke="#E8521A" stroke-width="3.5" stroke-linecap="round"/>
+      <!-- Diagonal tail line 2 -->
+      <line x1="26" y1="27" x2="38" y2="47" stroke="#E8521A" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>
     <div>
       <div class="nav-title">QBP Content Tools</div>
       <div class="nav-sub">Ecomm Product Content Team</div>
@@ -592,7 +602,7 @@
         <a class="dropdown-item" href="resources/QBP_Tools_Testing_Log.docx" download>
           <span class="dropdown-item-icon">📋</span>
           <div class="dropdown-item-text">
-            <div class="dropdown-item-name">QBP Tools Testing & Baseline Log</div>
+            <div class="dropdown-item-name">QBP Tools Testing &amp; Baseline Log</div>
             <div class="dropdown-item-sub">Baselines, session logs, quality scores</div>
           </div>
           <span class="placeholder-tag">.docx</span>
@@ -635,7 +645,7 @@
         </a>
 
         <div class="dropdown-divider"></div>
-        <div class="dropdown-section-label">Visual & Brand</div>
+        <div class="dropdown-section-label">Visual &amp; Brand</div>
 
         <a class="dropdown-item" href="#">
           <span class="dropdown-item-icon">🎨</span>
@@ -682,10 +692,81 @@
 
 <!-- ── HERO ── -->
 <section class="hero">
-  <div class="hero-eyebrow">QBP Ecomm Content Team</div>
-  <h1>Your <span>content tools</span>,<br>all in one place.</h1>
-  <p>A central hub for the Ecomm Product Content Team. Click any tool below to open it.</p>
-  <div class="hero-divider"></div>
+  <div class="hero-text">
+    <div class="hero-eyebrow">QBP Ecomm Content Team</div>
+    <h1>Your <span>content tools</span>,<br>all in one place.</h1>
+    <p>A central hub for the Ecomm Product Content Team. Click any tool below to open it.</p>
+    <div class="hero-divider"></div>
+  </div>
+
+  <!-- Decorative bike illustration -->
+  <div class="hero-art">
+    <svg viewBox="0 0 340 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Rear wheel -->
+      <circle cx="90" cy="158" r="58" stroke="white" stroke-width="7"/>
+      <circle cx="90" cy="158" r="10" fill="white"/>
+      <!-- Rear spokes (8) -->
+      <line x1="90" y1="100" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="131" y1="117" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="148" y1="158" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="131" y1="199" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="90" y1="216" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="49" y1="199" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="32" y1="158" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="49" y1="117" x2="90" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+
+      <!-- Front wheel -->
+      <circle cx="252" cy="158" r="58" stroke="white" stroke-width="7"/>
+      <circle cx="252" cy="158" r="10" fill="white"/>
+      <!-- Front spokes (8) -->
+      <line x1="252" y1="100" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="293" y1="117" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="310" y1="158" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="293" y1="199" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="252" y1="216" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="211" y1="199" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="194" y1="158" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+      <line x1="211" y1="117" x2="252" y2="158" stroke="white" stroke-width="2" opacity="0.5"/>
+
+      <!-- Frame: seat stays -->
+      <line x1="152" y1="72" x2="90" y2="158" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <!-- Frame: chain stays -->
+      <line x1="171" y1="158" x2="90" y2="158" stroke="white" stroke-width="7" stroke-linecap="round"/>
+      <!-- Frame: seat tube -->
+      <line x1="171" y1="158" x2="152" y2="62" stroke="white" stroke-width="7" stroke-linecap="round"/>
+      <!-- Frame: top tube -->
+      <line x1="152" y1="68" x2="226" y2="62" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <!-- Frame: down tube -->
+      <line x1="232" y1="76" x2="171" y2="158" stroke="white" stroke-width="7" stroke-linecap="round"/>
+
+      <!-- Fork -->
+      <line x1="236" y1="80" x2="252" y2="158" stroke="white" stroke-width="7" stroke-linecap="round"/>
+
+      <!-- Head tube -->
+      <line x1="226" y1="56" x2="238" y2="84" stroke="white" stroke-width="9" stroke-linecap="round"/>
+
+      <!-- Chainring -->
+      <circle cx="171" cy="158" r="18" stroke="white" stroke-width="5" fill="none"/>
+      <circle cx="171" cy="158" r="5" fill="white"/>
+
+      <!-- Crank arms -->
+      <line x1="171" y1="158" x2="184" y2="175" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <line x1="171" y1="158" x2="158" y2="141" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <!-- Pedals -->
+      <line x1="178" y1="180" x2="192" y2="172" stroke="white" stroke-width="5" stroke-linecap="round"/>
+      <line x1="152" y1="136" x2="166" y2="128" stroke="white" stroke-width="5" stroke-linecap="round"/>
+
+      <!-- Saddle -->
+      <path d="M136 54 Q152 46 168 52" stroke="white" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <!-- Seatpost -->
+      <line x1="152" y1="56" x2="152" y2="72" stroke="white" stroke-width="5" stroke-linecap="round"/>
+
+      <!-- Handlebar stem -->
+      <line x1="230" y1="60" x2="230" y2="38" stroke="white" stroke-width="6" stroke-linecap="round"/>
+      <!-- Handlebars (drop bars) -->
+      <path d="M216 36 Q230 30 244 36 Q248 40 246 48" stroke="white" stroke-width="5" stroke-linecap="round" fill="none"/>
+    </svg>
+  </div>
 </section>
 
 <!-- ── PAGE BODY ── -->
@@ -789,7 +870,6 @@
         <span class="new-badge">New</span>
       </div>
 
-      <!-- Pinned announcement (placeholder) -->
       <div class="announcement-item pinned">
         <div class="announcement-meta">
           <span class="pin-icon">📌</span>
@@ -799,7 +879,6 @@
         <div class="announcement-text">Welcome to the QBP Content Team Hub! This is a proof of concept, more updates to come! Drop any ideas in Team Chat.</div>
       </div>
 
-      <!-- Placeholder announcements -->
       <div class="announcement-item">
         <div class="announcement-meta">
           <span class="announcement-author">Team Update</span>
@@ -849,16 +928,26 @@
 </div>
 
 <footer>
+  <div class="footer-logo">
+    <svg height="24" viewBox="0 0 42 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2.5" y="2.5" width="31" height="38" rx="10" stroke="white" stroke-width="3.5" fill="none"/>
+      <rect x="9" y="9" width="18" height="25" rx="6" stroke="white" stroke-width="3.5" fill="none"/>
+      <line x1="20" y1="27" x2="32" y2="47" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="26" y1="27" x2="38" y2="47" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>
+    <span style="font-weight:600; font-size:13px;">Quality Bicycle Products</span>
+  </div>
   QBP Ecomm Product Content Team &nbsp;·&nbsp; Internal Use Only
 </footer>
 
 <script>
   function toggleDropdown(id) {
     const el = document.getElementById(id);
-    el.classList.toggle('open');
+    const isOpen = el.classList.contains('open');
+    document.querySelectorAll('.dropdown.open').forEach(d => d.classList.remove('open'));
+    if (!isOpen) el.classList.add('open');
   }
 
-  // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
     document.querySelectorAll('.dropdown.open').forEach(function(d) {
       if (!d.contains(e.target)) d.classList.remove('open');
