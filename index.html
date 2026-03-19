@@ -579,6 +579,34 @@
 
   <div class="nav-right">
 
+    <!-- Testing Logs Dropdown -->
+    <div class="dropdown" id="logsDropdown">
+      <button class="dropdown-btn" onclick="toggleDropdown('logsDropdown')">
+        🧪 Testing Logs
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="dropdown-menu">
+        <div class="dropdown-section-label">Tool Testing</div>
+        <a class="dropdown-item" href="resources/QBP_Tools_Testing_Log.docx" download>
+          <span class="dropdown-item-icon">📋</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">QBP Tools Testing & Baseline Log</div>
+            <div class="dropdown-item-sub">Baselines, session logs, quality scores</div>
+          </div>
+          <span class="placeholder-tag">.docx</span>
+        </a>
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">➕</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">Add another log...</div>
+            <div class="dropdown-item-sub">Ask Claude to add more testing docs</div>
+          </div>
+        </a>
+      </div>
+    </div>
+
     <!-- Style Guides Dropdown -->
     <div class="dropdown" id="styleDropdown">
       <button class="dropdown-btn" onclick="toggleDropdown('styleDropdown')">
