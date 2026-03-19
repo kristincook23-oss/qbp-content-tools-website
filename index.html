@@ -77,6 +77,13 @@
     margin-top: 1px;
   }
 
+  /* ── NAV LINKS + DROPDOWN ── */
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
   .nav-badge {
     font-size: 11px;
     font-weight: 500;
@@ -86,11 +93,132 @@
     border: 1px solid rgba(212,83,30,0.25);
     border-radius: 20px;
     letter-spacing: 0.02em;
+    margin-left: 8px;
+  }
+
+  .dropdown {
+    position: relative;
+  }
+
+  .dropdown-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--white);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .dropdown-btn:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.16);
+  }
+
+  .dropdown-btn svg {
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  .dropdown.open .dropdown-btn svg {
+    transform: rotate(180deg);
+  }
+
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: #1e2844;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 6px;
+    min-width: 240px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    z-index: 200;
+  }
+
+  .dropdown.open .dropdown-menu {
+    display: block;
+  }
+
+  .dropdown-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 8px 10px 4px;
+  }
+
+  .dropdown-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 4px;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 7px;
+    text-decoration: none;
+    color: var(--white);
+    font-size: 13px;
+    transition: background 0.14s;
+    cursor: pointer;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(255,255,255,0.07);
+  }
+
+  .dropdown-item-icon {
+    font-size: 15px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .dropdown-item-text {
+    flex: 1;
+  }
+
+  .dropdown-item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--white);
+  }
+
+  .dropdown-item-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .placeholder-tag {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    background: rgba(255,255,255,0.07);
+    color: var(--text-muted);
+    border-radius: 4px;
+    flex-shrink: 0;
   }
 
   /* ── HERO ── */
   .hero {
-    padding: 4rem 2.5rem 3rem;
+    padding: 3.5rem 2.5rem 2.5rem;
     max-width: 1100px;
     margin: 0 auto;
   }
@@ -113,9 +241,7 @@
     margin-bottom: 16px;
   }
 
-  .hero h1 span {
-    color: var(--orange);
-  }
+  .hero h1 span { color: var(--orange); }
 
   .hero p {
     font-size: 16px;
@@ -132,38 +258,47 @@
     border-radius: 2px;
   }
 
-  /* ── TOOLS GRID ── */
-  .tools-section {
+  /* ── PAGE BODY ── */
+  .page-body {
     max-width: 1100px;
     margin: 0 auto;
     padding: 0 2.5rem 5rem;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    align-items: start;
   }
 
+  .main-col { display: flex; flex-direction: column; gap: 32px; }
+  .side-col { display: flex; flex-direction: column; gap: 20px; }
+
+  /* ── SECTION HEADERS ── */
   .section-label {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-muted);
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
+  /* ── TOOLS GRID ── */
   .tools-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
   }
 
   .tool-card {
     background: var(--navy-light);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 28px;
+    padding: 24px;
     text-decoration: none;
     color: inherit;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
     transition: background 0.18s, border-color 0.18s, transform 0.18s;
     cursor: pointer;
     position: relative;
@@ -173,9 +308,7 @@
   .tool-card::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
+    top: 0; left: 0; right: 0;
     height: 3px;
     background: var(--orange);
     opacity: 0;
@@ -188,31 +321,25 @@
     transform: translateY(-2px);
   }
 
-  .tool-card:hover::before {
-    opacity: 1;
-  }
+  .tool-card:hover::before { opacity: 1; }
 
   .tool-icon {
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     background: var(--orange-light);
     border: 1px solid rgba(212, 83, 30, 0.2);
     border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
-  }
-
-  .tool-info {
-    flex: 1;
+    font-size: 19px;
   }
 
   .tool-name {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--white);
-    margin-bottom: 8px;
+    margin-bottom: 7px;
     letter-spacing: -0.01em;
   }
 
@@ -225,7 +352,7 @@
   .tool-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 5px;
     margin-top: 4px;
   }
 
@@ -234,7 +361,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 3px 8px;
+    padding: 3px 7px;
     border-radius: 4px;
     background: rgba(255,255,255,0.06);
     color: var(--text-muted);
@@ -250,12 +377,166 @@
     margin-top: auto;
   }
 
-  .tool-arrow svg {
-    transition: transform 0.18s;
+  .tool-arrow svg { transition: transform 0.18s; }
+  .tool-card:hover .tool-arrow svg { transform: translateX(4px); }
+
+  /* ── ANNOUNCEMENTS ── */
+  .announcements-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
   }
 
-  .tool-card:hover .tool-arrow svg {
-    transform: translateX(4px);
+  .announcements-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .announcements-title {
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .announcements-title span { font-size: 15px; }
+
+  .new-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    background: var(--orange);
+    color: white;
+    border-radius: 4px;
+  }
+
+  .announcement-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+
+  .announcement-item:last-child { border-bottom: none; }
+
+  .announcement-item.pinned::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--orange);
+    border-radius: 0 2px 2px 0;
+  }
+
+  .announcement-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+
+  .announcement-author {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  .announcement-date {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .pin-icon {
+    font-size: 10px;
+    color: var(--orange);
+  }
+
+  .announcement-text {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .announcement-placeholder {
+    padding: 28px 20px;
+    text-align: center;
+  }
+
+  .announcement-placeholder p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .announcement-placeholder .placeholder-hint {
+    font-size: 11px;
+    color: rgba(139,149,174,0.5);
+    margin-top: 6px;
+  }
+
+  /* ── QUICK LINKS ── */
+  .quick-links-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+
+  .quick-links-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .quick-links-header span { font-size: 15px; }
+
+  .quick-link-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 20px;
+    border-bottom: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--white);
+    font-size: 13px;
+    transition: background 0.14s;
+  }
+
+  .quick-link-item:last-child { border-bottom: none; }
+
+  .quick-link-item:hover { background: rgba(255,255,255,0.04); }
+
+  .quick-link-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .quick-link-dot.orange { background: var(--orange); }
+  .quick-link-dot.blue { background: #4a90d9; }
+  .quick-link-dot.green { background: #4aad7c; }
+  .quick-link-dot.purple { background: #8b7dd9; }
+
+  .quick-link-name {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .quick-link-ext {
+    color: var(--text-muted);
+    opacity: 0.5;
   }
 
   /* ── FOOTER ── */
@@ -268,16 +549,25 @@
   }
 
   /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .page-body { grid-template-columns: 1fr; }
+    .side-col { flex-direction: row; flex-wrap: wrap; }
+    .announcements-card, .quick-links-card { flex: 1; min-width: 280px; }
+  }
+
   @media (max-width: 600px) {
     nav { padding: 0 1.25rem; }
     .hero { padding: 2.5rem 1.25rem 2rem; }
-    .tools-section { padding: 0 1.25rem 3rem; }
+    .page-body { padding: 0 1.25rem 3rem; }
     .tools-grid { grid-template-columns: 1fr; }
+    .side-col { flex-direction: column; }
+    .nav-badge { display: none; }
   }
 </style>
 </head>
 <body>
 
+<!-- ── NAV ── -->
 <nav>
   <div class="nav-brand">
     <div class="nav-logo">Q</div>
@@ -286,9 +576,83 @@
       <div class="nav-sub">Ecomm Product Content Team</div>
     </div>
   </div>
-  <div class="nav-badge">Internal Hub</div>
+
+  <div class="nav-right">
+
+    <!-- Style Guides Dropdown -->
+    <div class="dropdown" id="styleDropdown">
+      <button class="dropdown-btn" onclick="toggleDropdown('styleDropdown')">
+        📄 Style Guides
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="dropdown-menu">
+        <div class="dropdown-section-label">Writing</div>
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">✍️</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">QBP Copy Style Guide</div>
+            <div class="dropdown-item-sub">Tone, grammar, punctuation rules</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">📝</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">Product Description Templates</div>
+            <div class="dropdown-item-sub">Category-specific formats</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-section-label">Visual & Brand</div>
+
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">🎨</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">Image Standards</div>
+            <div class="dropdown-item-sub">Specs, backgrounds, naming</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">🏷️</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">QBP Brand Guidelines</div>
+            <div class="dropdown-item-sub">Logo, color, typography</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-section-label">Processes</div>
+
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">🔄</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">Content Intake SOP</div>
+            <div class="dropdown-item-sub">Step-by-step vendor process</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+        <a class="dropdown-item" href="#">
+          <span class="dropdown-item-icon">✅</span>
+          <div class="dropdown-item-text">
+            <div class="dropdown-item-name">QA Checklist</div>
+            <div class="dropdown-item-sub">Pre-publish review steps</div>
+          </div>
+          <span class="placeholder-tag">Soon</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-badge">Internal Hub</div>
+  </div>
 </nav>
 
+<!-- ── HERO ── -->
 <section class="hero">
   <div class="hero-eyebrow">QBP Ecomm Content Team</div>
   <h1>Your <span>content tools</span>,<br>all in one place.</h1>
@@ -296,92 +660,197 @@
   <div class="hero-divider"></div>
 </section>
 
-<section class="tools-section">
-  <div class="section-label">Available Tools — 4</div>
-  <div class="tools-grid">
+<!-- ── PAGE BODY ── -->
+<div class="page-body">
 
-    <a class="tool-card" href="tools/vendor-portal.html">
-      <div class="tool-icon">🏪</div>
-      <div class="tool-info">
-        <div class="tool-name">Vendor Content Portal</div>
-        <div class="tool-desc">Manage and review vendor-submitted content. Toggle between admin and vendor modes to streamline the intake and approval process.</div>
-        <div class="tool-tags">
-          <span class="tag">Vendors</span>
-          <span class="tag">Content Intake</span>
-          <span class="tag">Admin</span>
-        </div>
-      </div>
-      <div class="tool-arrow">
-        Open Tool
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    </a>
+  <!-- LEFT: Tools -->
+  <div class="main-col">
+    <div>
+      <div class="section-label">Available Tools — 4</div>
+      <div class="tools-grid">
 
-    <a class="tool-card" href="tools/rich-content-planner.html">
-      <div class="tool-icon">📅</div>
-      <div class="tool-info">
-        <div class="tool-name">Rich Content Weekly Planner</div>
-        <div class="tool-desc">Plan and track rich content production by week. Organize vendor projects, deadlines, and deliverables in one view.</div>
-        <div class="tool-tags">
-          <span class="tag">Planning</span>
-          <span class="tag">Rich Content</span>
-          <span class="tag">Weekly</span>
-        </div>
-      </div>
-      <div class="tool-arrow">
-        Open Tool
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    </a>
+        <a class="tool-card" href="tools/vendor-portal.html">
+          <div class="tool-icon">🏪</div>
+          <div>
+            <div class="tool-name">Vendor Content Portal</div>
+            <div class="tool-desc">Manage and review vendor-submitted content. Toggle between admin and vendor modes to streamline intake and approvals.</div>
+            <div class="tool-tags">
+              <span class="tag">Vendors</span>
+              <span class="tag">Content Intake</span>
+              <span class="tag">Admin</span>
+            </div>
+          </div>
+          <div class="tool-arrow">
+            Open Tool
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
 
-    <a class="tool-card" href="tools/product-transformer.html">
-      <div class="tool-icon">⚙️</div>
-      <div class="tool-info">
-        <div class="tool-name">QBP Product Transformer</div>
-        <div class="tool-desc">Transform and reformat raw product data for ecomm. Map fields, clean copy, and export publish-ready content from vendor spreadsheets.</div>
-        <div class="tool-tags">
-          <span class="tag">Data</span>
-          <span class="tag">Product Copy</span>
-          <span class="tag">Export</span>
-        </div>
-      </div>
-      <div class="tool-arrow">
-        Open Tool
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    </a>
+        <a class="tool-card" href="tools/rich-content-planner.html">
+          <div class="tool-icon">📅</div>
+          <div>
+            <div class="tool-name">Rich Content Weekly Planner</div>
+            <div class="tool-desc">Plan and track rich content production by week. Organize vendor projects, deadlines, and deliverables in one view.</div>
+            <div class="tool-tags">
+              <span class="tag">Planning</span>
+              <span class="tag">Rich Content</span>
+              <span class="tag">Weekly</span>
+            </div>
+          </div>
+          <div class="tool-arrow">
+            Open Tool
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
 
-    <a class="tool-card" href="tools/vendor-copy-audit.html">
-      <div class="tool-icon">🔍</div>
-      <div class="tool-info">
-        <div class="tool-name">Vendor Copy Audit</div>
-        <div class="tool-desc">Audit vendor-supplied product copy for quality, completeness, and compliance. Review, approve, or flag copy at the model and SKU level.</div>
-        <div class="tool-tags">
-          <span class="tag">Audit</span>
-          <span class="tag">Copy Quality</span>
-          <span class="tag">Review</span>
+        <a class="tool-card" href="tools/product-transformer.html">
+          <div class="tool-icon">⚙️</div>
+          <div>
+            <div class="tool-name">QBP Product Transformer</div>
+            <div class="tool-desc">Transform and reformat raw product data for ecomm. Map fields, clean copy, and export publish-ready content from vendor spreadsheets.</div>
+            <div class="tool-tags">
+              <span class="tag">Data</span>
+              <span class="tag">Product Copy</span>
+              <span class="tag">Export</span>
+            </div>
+          </div>
+          <div class="tool-arrow">
+            Open Tool
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
+
+        <a class="tool-card" href="tools/vendor-copy-audit.html">
+          <div class="tool-icon">🔍</div>
+          <div>
+            <div class="tool-name">Vendor Copy Audit</div>
+            <div class="tool-desc">Audit vendor-supplied product copy for quality, completeness, and compliance. Review, approve, or flag copy at the model and SKU level.</div>
+            <div class="tool-tags">
+              <span class="tag">Audit</span>
+              <span class="tag">Copy Quality</span>
+              <span class="tag">Review</span>
+            </div>
+          </div>
+          <div class="tool-arrow">
+            Open Tool
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </a>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Sidebar -->
+  <div class="side-col">
+
+    <!-- Announcements -->
+    <div class="announcements-card">
+      <div class="announcements-header">
+        <div class="announcements-title">
+          <span>📣</span> Team Announcements
         </div>
+        <span class="new-badge">New</span>
       </div>
-      <div class="tool-arrow">
-        Open Tool
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Pinned announcement (placeholder) -->
+      <div class="announcement-item pinned">
+        <div class="announcement-meta">
+          <span class="pin-icon">📌</span>
+          <span class="announcement-author">Kristin</span>
+          <span class="announcement-date">Mar 19</span>
+        </div>
+        <div class="announcement-text">Welcome to the QBP Content Team Hub! All our tools are now in one place. More features coming soon — drop requests in the team Slack.</div>
+      </div>
+
+      <!-- Placeholder announcements -->
+      <div class="announcement-item">
+        <div class="announcement-meta">
+          <span class="announcement-author">Team Update</span>
+          <span class="announcement-date">Placeholder</span>
+        </div>
+        <div class="announcement-text" style="color: rgba(139,149,174,0.45); font-style: italic;">Your next announcement will appear here. Just ask Claude to add it!</div>
+      </div>
+
+      <div class="announcement-item">
+        <div class="announcement-meta">
+          <span class="announcement-author">Team Update</span>
+          <span class="announcement-date">Placeholder</span>
+        </div>
+        <div class="announcement-text" style="color: rgba(139,149,174,0.45); font-style: italic;">Another announcement slot — deadlines, new tools, process changes, etc.</div>
+      </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="quick-links-card">
+      <div class="quick-links-header">
+        <span>🔗</span> Quick Links
+      </div>
+      <a class="quick-link-item" href="#">
+        <div class="quick-link-dot orange"></div>
+        <span class="quick-link-name">QBP Confluence</span>
+        <svg class="quick-link-ext" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7M7 1h4m0 0v4m0-4L5 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-      </div>
-    </a>
+      </a>
+      <a class="quick-link-item" href="#">
+        <div class="quick-link-dot blue"></div>
+        <span class="quick-link-name">Jira Board</span>
+        <svg class="quick-link-ext" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7M7 1h4m0 0v4m0-4L5 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      <a class="quick-link-item" href="#">
+        <div class="quick-link-dot green"></div>
+        <span class="quick-link-name">Google Drive — Content Team</span>
+        <svg class="quick-link-ext" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7M7 1h4m0 0v4m0-4L5 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      <a class="quick-link-item" href="#">
+        <div class="quick-link-dot purple"></div>
+        <span class="quick-link-name">Vendor Submission Form</span>
+        <svg class="quick-link-ext" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7M7 1h4m0 0v4m0-4L5 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+      <a class="quick-link-item" href="#">
+        <div class="quick-link-dot"></div>
+        <span class="quick-link-name">Add a link here...</span>
+        <svg class="quick-link-ext" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M5 2H2a1 1 0 00-1 1v7a1 1 0 001 1h7a1 1 0 001-1V7M7 1h4m0 0v4m0-4L5 7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+    </div>
 
   </div>
-</section>
+</div>
 
 <footer>
   QBP Ecomm Product Content Team &nbsp;·&nbsp; Internal Use Only
 </footer>
+
+<script>
+  function toggleDropdown(id) {
+    const el = document.getElementById(id);
+    el.classList.toggle('open');
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    document.querySelectorAll('.dropdown.open').forEach(function(d) {
+      if (!d.contains(e.target)) d.classList.remove('open');
+    });
+  });
+</script>
 
 </body>
 </html>
