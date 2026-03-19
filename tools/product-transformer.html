@@ -353,7 +353,7 @@ function clearAll() {
 }
 
 function buildPrompt(source) {
-  return `You are a product content specialist for QBP (Quality Bicycle Products). Given vendor product information, generate structured content for Enterworks PIM import.
+  return `You are a product content specialist for QBP (Quality Bicycle Products), and for the Rich Content section you are acting as the QBP Rich Content Builder. Given vendor product information, generate structured content for Enterworks PIM import.
 
 For each product, output EXACTLY these labeled sections in order. Use plain text labels (no markdown headers, no asterisks, no bold):
 
@@ -374,31 +374,79 @@ SKU [sku or color/size]:
 2. Bullet
 Otherwise write: No SKU-level bullets]
 RICH CONTENT SUGGESTIONS:
-Block 1 — [Title Case Headline with em-dash style — e.g. "Radar That Reads the Road Behind You"]
-- Bullet one
-- Bullet two
-- Bullet three
+Block 1 — [Headline]
+- Line one
+- Line two
+- Line three
 Block 2 — [Headline]
-- Bullet one
-- Bullet two
-- Bullet three
+- Line one
+- Line two
+- Line three
 Block 3 — [Headline]
-- Bullet one
-- Bullet two
-- Bullet three
+- Line one
+- Line two
+- Line three
 Block 4 — [Headline]
-- Bullet one
-- Bullet two
-- Bullet three
+- Line one
+- Line two
+- Line three
+SELF-AUDIT:
+Fact density: [X] quantified specs used across 4 blocks
+Source quality: [Rich / Moderate / Thin] — [one sentence]
+Differentiation note: [confirm blocks pull from underemphasized angles, or flag overlap with standard PDP copy]
+Review flag: [None / specific concern]
 --- PRODUCT END ---
 
-Rules:
-- Bullets must end strong — with a concrete fact, spec, or outcome. No weak endings like "for all riders" or "enhances your experience". Do NOT append a formulaic em-dash rider payoff to every bullet ("— riders get X"). Write each bullet as one clean, direct statement.
+==== RULES FOR ALL SECTIONS ====
+- Bullets and rich content lines must end strong — with a concrete fact, spec, or outcome. No weak endings like "for all riders" or "enhances your experience". Do NOT append a formulaic em-dash rider payoff to every line. Write each as one clean, direct statement.
 - No filler phrases: "perfect for", "designed to", "built for", "ideal for", "innovative"
 - Do not convert units unless the source provides both
 - Do not offer follow-up options or next steps after your output
 - SKU bullets only when SKUs have meaningful functional differences — size/color variants inherit model bullets
 - If processing multiple products, repeat the labeled block for each, then append: BATCH SUMMARY: [N] products processed.
+- Consumer-safe means: no guaranteed safety outcome claims, no named competitor comparisons, no medical/health language, no age-specific targeting, no claims requiring a disclaimer. Paraphrase vendor claims that cross these lines into factual capability statements.
+
+==== RICH CONTENT INSTRUCTIONS (apply to RICH CONTENT SUGGESTIONS section only) ====
+
+INTERNAL STEP — EXTRACT THE FACT BANK (do not output this step, use it to inform the blocks):
+Pull out: quantified specs (numbers, ranges, distances, weights, lumens, battery life, run time, visibility distances, IP ratings, etc.), compatibility/ecosystem details (apps, devices, platforms, standards), unique functions or behaviors (detection types, alert types, modes, automatic behaviors, classifications), included items or notable conditions (only if explicitly stated).
+Then identify which facts are likely already covered in standard PDP bullets — and prioritize the underemphasized details for the rich content blocks. The goal is to surface what standard copy skips: a use-case angle, an ecosystem detail, a secondary feature, or a combination of specs that tells a more interesting story.
+
+BLOCK RULES:
+- Always exactly 4 blocks
+- Each block: one headline (max ~10 words) + 2–4 concise lines beneath it
+- No periods at end of any line
+- Each block must cover a distinct angle. Valid angles: standout feature/differentiator, who it's for/use case, fit/setup/compatibility, materials/construction/durability, ecosystem/connectivity, what's included, brand design intent
+- Never force an angle without source support. If two angles overlap, merge them and use the freed slot for something different
+- If the same app, device, or feature appears in more than one block, consolidate it into the block where it's most relevant and use the freed lines for something else
+
+HEADLINE TONE:
+More expressive than PDP copy. Slightly playful is allowed. Aim for the right register — not flat, not hype:
+Too flat → Too hype → Right register:
+"Integrated Radar Detection" → "The Ultimate Radar Experience" → "Radar That Reads the Road Behind You"
+"Long Battery Life" → "Outlasts Every Ride, Guaranteed" → "Up to 15 Hours. Charge Less, Ride More"
+"Compatible With Your Devices" → "Works With Everything You Own" → "Pairs With Garmin, Wahoo, and More"
+
+LINES BENEATH EACH HEADLINE — think callout, not manual. Use these patterns:
+- Fact → outcome: "Detects vehicles up to 175 m back — more time to process before traffic arrives"
+- Capability → confidence: "Visible from up to 2 km away — drivers spot you sooner, day or night"
+- System behavior → rider experience: "Visual, audible, and haptic alerts — you know what's coming even heads-down"
+Weak line endings are the most common failure. Before finalizing any line, check the last 3–4 words. If they're abstract, rewrite to name what the rider actually sees, does, or doesn't have to do.
+Weak → Rewritten:
+"175 m of detection range for earlier awareness" → "175 m of detection range — more time to process before traffic arrives"
+"Designed to stay noticeable in daylight or low-light conditions" → "Visible from up to 2 km — day rides, dusk rides, no adjustment needed"
+"Works seamlessly within the Garmin ecosystem for streamlined awareness" → "Threat level and vehicle behavior display directly on your head unit"
+"Built for riders who spend more hours on the road than off it" → Cut. Restate the runtime fact with a sharper outcome instead.
+
+HARD RULES FOR LINES:
+- Include 2–4 quantified details across all 4 blocks when the source has numbers — keep units, don't paraphrase away specs
+- Do not convert or add imperial/metric equivalents unless the source provides both
+- If a line has no source-backed fact to anchor it, cut the line rather than filling with descriptive or atmospheric language
+- Include at least 1 compatibility detail if the source mentions paired apps or devices
+- Never invent numbers, certifications, compatibility claims, or test results
+- Avoid passive or instructional phrasing
+- BANNED (unless immediately followed by a specific source-backed fact): "ride safer", "more awareness", "peace of mind", "next-level", "game changer"
+- BANNED LINE ENDINGS (unless followed by a concrete clarifier): awareness, performance, experience, conditions, friction, reliability, consistency
 
 Product source:
 ${source}`;
@@ -541,7 +589,7 @@ function parseOutput(rawText) {
 
 function getField(text, label) {
   const labels = ['NAME \\(Long Description\\)','BRAND','TAXONOMY NODE','MODEL CODE',
-    'MODEL DESCRIPTION','MODEL BULLETS','SKU BULLETS','RICH CONTENT SUGGESTIONS','---\\s*PRODUCT'];
+    'MODEL DESCRIPTION','MODEL BULLETS','SKU BULLETS','RICH CONTENT SUGGESTIONS','SELF-AUDIT','---\\s*PRODUCT'];
   const idx = labels.findIndex(l => new RegExp(l,'i').test(label));
   const nextLabels = labels.slice(idx + 1).join('|');
   const re = new RegExp(`${label}\\s*:\\s*([\\s\\S]*?)(?=(?:${nextLabels})|$)`, 'i');
