@@ -263,15 +263,26 @@
   .hero-art {
     flex-shrink: 0;
     width: 340px;
-    opacity: 0.18;
     position: relative;
     pointer-events: none;
+  }
+
+  /* Soft navy blob that masks the background tile pattern behind the bike */
+  .hero-art::before {
+    content: '';
+    position: absolute;
+    inset: -30px;
+    background: radial-gradient(ellipse at center, #1a2035 28%, rgba(26,32,53,0) 72%);
+    z-index: 0;
   }
 
   .hero-art svg {
     width: 100%;
     height: auto;
+    opacity: 0.18;
     filter: drop-shadow(0 0 40px rgba(232,82,26,0.3));
+    position: relative;
+    z-index: 1;
   }
 
   /* ── PAGE BODY ── */
