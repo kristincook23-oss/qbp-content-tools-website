@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Part Number Prefix Lookup — QBP Content Tools</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg-secondary: #f7f6f3; --bg-tertiary: #efede8;
+  --text-primary: #1a1917; --text-secondary: #6b6a66; --text-tertiary: #9e9d99;
+  --border: rgba(0,0,0,0.11); --border-med: rgba(0,0,0,0.20);
+  --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --brand: #D4531E;
+  --amber-bg:#FAEEDA; --amber-text:#633806;
+  --blue-bg:#E6F1FB; --blue-text:#0C447C; --blue-border:#185FA5;
+  --green-bg:#E1F5EE; --green-text:#085041; --green-border:#0F6E56;
+}
+body { font-family:var(--font); background:var(--bg-tertiary); color:var(--text-primary); min-height:100vh; }
+
+/* POC BANNER */
+.poc-banner { background:#f5a623; color:#1a1a1a; text-align:center; padding:8px 24px; font-size:12px; font-weight:600; letter-spacing:0.04em; display:flex; align-items:center; justify-content:center; gap:10px; position:sticky; top:0; z-index:101; }
+.poc-badge { background:#1a1a1a; color:#f5a623; font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; padding:2px 8px; border-radius:2px; }
+.poc-text { color:#5a3a00; }
+
+/* NAV */
+.nav { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 2rem; display:flex; align-items:center; justify-content:space-between; height:56px; position:sticky; top:37px; z-index:100; }
+.nav-brand { display:flex; align-items:center; gap:12px; }
+.nav-logo { width:32px; height:32px; background:var(--brand); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14px; }
+.nav-title { font-size:15px; font-weight:500; }
+.nav-subtitle { font-size:12px; color:var(--text-secondary); margin-top:1px; }
+.back-link { font-size:13px; color:var(--text-secondary); text-decoration:none; display:flex; align-items:center; gap:5px; padding:6px 12px; border-radius:var(--radius-md); transition:background 0.14s; }
+.back-link:hover { background:var(--bg-secondary); color:var(--text-primary); }
+
+/* MAIN */
+.main { max-width:860px; margin:0 auto; padding:2rem 1.5rem 4rem; }
+
+/* PAGE HEADER */
+.page-header { margin-bottom:1.5rem; }
+.page-header h1 { font-size:24px; font-weight:600; margin-bottom:6px; }
+.page-header p { font-size:14px; color:var(--text-secondary); line-height:1.6; }
+
+/* SEARCH CARD */
+.search-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-xl); padding:1.25rem 1.5rem; margin-bottom:1.25rem; }
+.search-wrap { display:flex; align-items:center; gap:10px; }
+.search-input-wrap { position:relative; flex:1; }
+.search-input-wrap svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-tertiary); pointer-events:none; }
+#searchInput { width:100%; padding:10px 12px 10px 38px; border:0.5px solid var(--border-med); border-radius:var(--radius-md); font-size:14px; font-family:var(--font); background:var(--bg-secondary); color:var(--text-primary); outline:none; transition:border-color 0.15s, background 0.15s; }
+#searchInput:focus { border-color:var(--brand); background:var(--bg); }
+#searchInput::placeholder { color:var(--text-tertiary); }
+.clear-btn { display:none; background:none; border:none; cursor:pointer; color:var(--text-tertiary); padding:4px; border-radius:4px; line-height:0; }
+.clear-btn:hover { color:var(--text-primary); }
+.search-hint { margin-top:8px; font-size:12px; color:var(--text-tertiary); }
+
+/* RESULTS BAR */
+.results-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding:0 2px; }
+.results-count { font-size:13px; color:var(--text-secondary); }
+.results-count strong { color:var(--text-primary); }
+.expand-all-btn { font-size:12px; color:var(--brand); background:none; border:none; cursor:pointer; padding:4px 8px; border-radius:var(--radius-sm); font-family:var(--font); }
+.expand-all-btn:hover { background:var(--bg-secondary); }
+
+/* TABLE CARD */
+.table-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-xl); overflow:hidden; }
+
+.prefix-row { border-bottom:0.5px solid var(--border); cursor:pointer; transition:background 0.12s; }
+.prefix-row:last-child { border-bottom:none; }
+.prefix-row:hover { background:var(--bg-secondary); }
+.prefix-row.expanded { background:var(--bg-secondary); }
+
+.row-main { display:flex; align-items:center; gap:12px; padding:11px 16px; }
+.prefix-badge { background:var(--brand); color:#fff; font-size:11px; font-weight:700; letter-spacing:0.06em; padding:3px 8px; border-radius:4px; min-width:36px; text-align:center; flex-shrink:0; font-family:monospace; }
+.row-category { flex:1; font-size:14px; font-weight:500; }
+.row-meta { font-size:12px; color:var(--text-tertiary); flex-shrink:0; }
+.row-arrow { color:var(--text-tertiary); flex-shrink:0; transition:transform 0.2s; line-height:0; }
+.prefix-row.expanded .row-arrow { transform:rotate(90deg); }
+
+/* SUBCATEGORY PANEL */
+.subcategory-panel { display:none; padding:0 16px 14px 16px; border-top:0.5px solid var(--border); }
+.prefix-row.expanded .subcategory-panel { display:block; }
+.subcat-label { font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:8px; margin-top:12px; }
+.subcat-grid { display:flex; flex-wrap:wrap; gap:5px; }
+.subcat-tag { background:var(--bg-tertiary); color:var(--text-secondary); font-size:12px; padding:3px 9px; border-radius:20px; border:0.5px solid var(--border); }
+
+/* NO RESULTS */
+.no-results { padding:3rem 1.5rem; text-align:center; color:var(--text-secondary); display:none; }
+.no-results strong { display:block; font-size:15px; font-weight:500; color:var(--text-primary); margin-bottom:6px; }
+
+/* HIGHLIGHT */
+mark { background:#FFF3CD; color:inherit; border-radius:2px; padding:0 1px; }
+
+@media(max-width:580px) {
+  .row-meta { display:none; }
+  .main { padding:1.25rem 1rem 3rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="poc-banner">
+  <span class="poc-badge">Proof of Concept</span>
+  <span class="poc-text">Internal use only — not an official QBP hosted tool</span>
+</div>
+
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">Q</div>
+    <div>
+      <div class="nav-title">Part Number Prefix Lookup</div>
+      <div class="nav-subtitle">QBP Ecomm Content Tools</div>
+    </div>
+  </div>
+  <a href="../index.html" class="back-link">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Back to Hub
+  </a>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Part Number Prefix Lookup</h1>
+    <p>Search by prefix (e.g. "HT") or by category/product type (e.g. "grip" or "brake"). Click any row to expand and see detailed subcategories. All <span id="totalCount"></span> prefixes are listed below.</p>
+  </div>
+
+  <div class="search-card">
+    <div class="search-wrap">
+      <div class="search-input-wrap">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Search by prefix or category — e.g. "grips", "HT", "brake"…" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="clear-btn" id="clearBtn" title="Clear search">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="search-hint">Searches prefix codes, category names, and subcategory names.</div>
+  </div>
+
+  <div class="results-bar">
+    <div class="results-count" id="resultsCount"></div>
+    <button class="expand-all-btn" id="expandAllBtn">Expand all</button>
+  </div>
+
+  <div class="table-card" id="tableContainer">
+    <!-- rows injected by JS -->
+  </div>
+  <div class="no-results" id="noResults">
+    <strong>No matches found</strong>
+    Try a different search — prefix codes are 2 letters (e.g. "BR"), or search a product type.
+  </div>
+</div>
+
+<script>
+const shortList = [
+  {p:'AB',c:'Shorts, Tights'},
+  {p:'AR',c:'Automobile racks'},
+  {p:'BA',c:'Batteries'},
+  {p:'BB',c:'Bearings'},
+  {p:'BC',c:'Bike Protectors'},
+  {p:'BE',c:'Bells, Horns'},
+  {p:'BG',c:'Bags, Packs, Panniers'},
+  {p:'BK',c:'Bicycles'},
+  {p:'BL',c:'Base layers'},
+  {p:'BO',c:'Bolts, Nuts, Washers'},
+  {p:'BR',c:'Brakes, Brake parts'},
+  {p:'BT',c:'Trailers'},
+  {p:'CA',c:'Cables, Housing, Ferrules, etc.'},
+  {p:'CG',c:'Chainguards'},
+  {p:'CH',c:'Chains, Chain Guards, Chain Guides'},
+  {p:'CK',c:'Crankset'},
+  {p:'CL',c:'Clothing'},
+  {p:'CP',c:'Crank parts'},
+  {p:'CR',c:'Cranks, Bottom brackets, Chainrings, parts'},
+  {p:'CS',c:'Spokes (custom)'},
+  {p:'CU',c:'Custom Wheels'},
+  {p:'CW',c:'Custom Wheels (build specs)'},
+  {p:'CY',c:'Computers, Heart Rate Monitors'},
+  {p:'DG',c:'Disc Golf products'},
+  {p:'DP',c:'Derailleur parts'},
+  {p:'DS',c:'Display Stands, Bike Storage Fixtures, POP Displays'},
+  {p:'EB',c:'Energy Bars, Nutritional Supplements'},
+  {p:'EC',c:'Cameras, GPS computers'},
+  {p:'EK',c:'Electric Assist products'},
+  {p:'ER',c:'Jewelry'},
+  {p:'EW',c:'Eyewear'},
+  {p:'FC',c:'Shoe covers'},
+  {p:'FD',c:'Front derailleurs'},
+  {p:'FE',c:'Fenders'},
+  {p:'FK',c:'Forks, Fork parts'},
+  {p:'FL',c:'Flags'},
+  {p:'FM',c:'Frames, Frame & Fork Sets'},
+  {p:'FS',c:'Frame fittings, Frame builder pieces'},
+  {p:'FW',c:'Freewheels, Cassettes, Cogs, Spacers'},
+  {p:'GL',c:'Gloves'},
+  {p:'HB',c:'Handlebars'},
+  {p:'HD',c:'Headsets, parts'},
+  {p:'HE',c:'Helmets'},
+  {p:'HT',c:'Handlebar Tape, Grips, Plugs'},
+  {p:'HU',c:'Hubs, parts'},
+  {p:'JJ',c:'Coffee'},
+  {p:'JK',c:'Jackets'},
+  {p:'JT',c:'Jerseys'},
+  {p:'KI',c:'Kickstands'},
+  {p:'KT',c:'Kit-in-a-Box'},
+  {p:'LB',c:'Leg bands, Pants clips'},
+  {p:'LD',c:'Shifters, parts'},
+  {p:'LK',c:'Locks'},
+  {p:'LT',c:'Lights'},
+  {p:'LU',c:'Lubricants'},
+  {p:'MA',c:'Maps, Books, Posters, Stickers, Brochures, Calendars'},
+  {p:'MI',c:'Mirrors'},
+  {p:'MS',c:'Trisport Products: Swimwear & Accessories, Running accessories & packs'},
+  {p:'MX',c:'BMX Numbers'},
+  {p:'OA',c:'Outdoor Accessories'},
+  {p:'OB',c:'Outdoor Bedding & Sleep'},
+  {p:'OC',c:'Outdoor Camp Gear'},
+  {p:'OF',c:'Outdoor Food'},
+  {p:'OH',c:'Outdoor Hydration & Water'},
+  {p:'OL',c:'Outdoor Lighting'},
+  {p:'OP',c:'Outdoor Poles'},
+  {p:'OS',c:'Outdoor Stoves & Fuel'},
+  {p:'OT',c:'Outdoor Shelters & Tents'},
+  {p:'OW',c:'Outdoor Water Sports & Packs'},
+  {p:'PD',c:'Pedals, parts'},
+  {p:'PG',c:'Protective Gear'},
+  {p:'PK',c:'Patch Kits and Tire Care'},
+  {p:'PS',c:'Parking Stands'},
+  {p:'PU',c:'Pumps, Valve parts'},
+  {p:'QR',c:'Hub Skewers'},
+  {p:'RC',c:'Rim Cement'},
+  {p:'RD',c:'Rear Derailleurs'},
+  {p:'RF',c:'Reflectors, Reflective Vests'},
+  {p:'RK',c:'Bike-Mounted Racks'},
+  {p:'RM',c:'Rims'},
+  {p:'RS',c:'Rim Strips, Rear Shocks & parts'},
+  {p:'RT',c:'Rim Tape'},
+  {p:'SA',c:'Saddles'},
+  {p:'SB',c:'Sports Bras'},
+  {p:'SH',c:'Shoes'},
+  {p:'SK',c:'Socks'},
+  {p:'SM',c:'Stems'},
+  {p:'SP',c:'Spokes'},
+  {p:'SQ',c:'Spokes (bulk)'},
+  {p:'ST',c:'Seatposts, Clamps & parts'},
+  {p:'TA',c:'Training Aids & Skin Care'},
+  {p:'TC',c:'Toe Clips'},
+  {p:'TL',c:'Tools'},
+  {p:'TR',c:'Tires'},
+  {p:'TS',c:'Toe Straps'},
+  {p:'TU',c:'Inner Tubes'},
+  {p:'TW',c:'Training Wheels'},
+  {p:'UN',c:'Unicycles'},
+  {p:'VI',c:'Videos'},
+  {p:'WB',c:'Water Bottles, Hydration Bags'},
+  {p:'WC',c:'Water Bottle Cages'},
+  {p:'WE',c:'Wheels'},
+  {p:'WH',c:'Spokes (WH)'},
+  {p:'WM',c:'Spokes (WM)'},
+  {p:'WT',c:'Stationary Trainers'},
+  {p:'XB',c:'Ski Bindings'},
+  {p:'XC',c:'Ski Accessories'},
+  {p:'XP',c:'Ski Poles'},
+  {p:'XR',c:'Roller Skis'},
+  {p:'XS',c:'Snowshoes'},
+  {p:'XT',c:'Ski and Waxing Tools'},
+  {p:'XW',c:'Ski Wax'},
+];
+
+const subs = {
+  AB:['Casual Pants','Casual Short','Cycling Pants','Cycling Skirt/Dress','Dresses and Skirts','Knickers','Multi-Sport Bottom','Multi-Sport Suit','Pant','Running Short','Running Skirt','Short Liner','Short/Bib Short','Tights/Bib Tights'],
+  AR:['Cargo Carrier','Fairing','Hitch Bike Rack','Hitch Rack Accessory','Hitch Rack Part','Hitch Watersport Rack','Load Bar','Load Bar Tower','Load Bar/Tower Set','Rack Accessories','Rack Fit Kits and Clips','Rack Service Part','Roof Rack Accessory','Roof Rack Bike Carrier','Roof Rack Wheel Fork','Ski Carrier','Spare Tire Rack','Spare Tire Rack Part','Tailgate Pad','Travel / Shipping Case','Travel / Shipping Case Accessory','Trunk Rack','Trunk Rack Accessory','Van/Truck Bed Rack','Van/Truck Bed Rack Part','Watersport Carrier'],
+  BA:['Battery','Electronic Shifter Extra Part','Electronic Shifter Parts, FSA','Rechargeable','Shifter Battery'],
+  BB:['Bearing Kit','Bottom Bracket Bearing Retainer','Cartridge Bearing','Cup and Bearing Kit','Headset Bearing','Hub Bearing Retainer','Loose Ball Bearing','Small Part'],
+  BC:['Bike Protector'],
+  BE:['Bell','Horn'],
+  BG:['Backpack','Bag & Tool Kit','Bag Part','Basket','Basket Accessory','Frame Pack','Handbag/Shoulder Bag/Tote','Handlebar Bag','Luggage/Duffle Bag','Lumbar/Fanny Pack','Messenger Bag','Panniers','Phone Bag and Holder','Rack Bag','Run Hydration','Seat Bag','Tool Wrap','Top Tube/Stem Bag','Trailer Bags','Transition Bag','Wallet','Wheel Bag'],
+  BK:['All-Road Bike','BMX Bikes','Cargo Bike','City Bike','Cyclocross Bike','Dirt Jump Bike','ebike','Fat Bike','Folding Bikes','Kids Bikes','Mountain Bike','Road Bike','Touring Bike','Track Bike'],
+  BL:['Bottom','Compression Bottom','Top'],
+  BO:['Axle Nut and Bolt','Bleed Kit','Bolt','Cargo Bike Accessory','Fastener Kits','Nut','Washer'],
+  BR:['BMX Caliper Brake','BMX Caliper Brake Sets','Brake Boss','Brake Lever Adjusting Barrel','Brake Lever Hood','Brake Lever, Drop Bar Individual','Brake Lever, Drop Bar Pair','Brake Lever, Flat Bar/BMX Pair','Brake Lever, Flat Bar/BMX- Individual','Brake Pad and Shoe Part','Brake Shoe and Pad','Cable Carrier','Cable Doubler','Cable End Crimp','Cable Stop and Guides','Caliper Brake Part','Cantilever Brake','Cantilever Brake Set','Disc Brake & Lever','Disc Brake Adaptor','Disc Brake Calipers','Disc Brake Hose Kit','Disc Brake Hose Parts','Disc Brake Pad','Disc Brake Workshop Kit','Disc Caliper Part','Disc Rotor','Disc Rotor Adaptor','Disc Rotor Parts and Lockrings','Drop Bar Inline Levers','Drop Bar Stoker Lever','Front Cable Hanger','Housing End Cap','Housing Guide','Hydraulic Brake Lever Part','Linear Pull Brake','Linear Pull Brake Noodle','Linear Pull Brake Set','Linear Pull Brake Small Part','Other Brake Lever Part','Reverse Lever Adaptor','Reverse Lever Pair','Road Caliper Brake','Roller Brake','Straddle Wire','U-Brake','U-Brake Part'],
+  BT:['Child Carrier Trailer','Other Trailer Parts','Stroller','Stroller Accessory','Trailer','Trailer Covers/Fabric Parts','Trailer Frame Parts','Trailer Hitch Parts','Trailer Stroller/Ski Kits','Trailer Wheels and Axle Parts'],
+  CA:['Brake & Derailleur Cable Housing Set','Brake Cable','Brake Cable & Housing Set','Brake Housing','Cable Coupler, Brake','Cable Coupler, Derailleur','Cantilever Brake Part','Derailleur Cable','Derailleur Cable & Housing Set','Derailleur Housing','Detangler','Detangler Cable & Housing','Detangler Plate','Other Cable & Housing Parts'],
+  CH:['Axle/Chain Tensioner','Belt Drive Belt','Chain','Chain Deflector','Chain Link and Pin','Chain Retention System','Chain Retention System Part','Chain Tensioner Part','Chainring','Chainring Bolt','Chains-Bulk','Chainstay/Frame Protection','Single-Speed / Dingle-Speed Tensioners'],
+  CK:['BMX Crankset','Crank Part','Crankset','Left Crank Arm','Power Meter'],
+  CL:['Apron','Arm Warmer','Balaclava','Caps and Beanies','Casual Shirt','Cycling Cap','Fitness Dress','Fitness Shorts','Fitness Tight','Fitness Top','Hats','Headbands and Ear Protection','Knee Warmer','Leg Warmer','Mechanics Shirt','Neck Protection','Patch','QBP Employee Clothing','Rain Cover','Run Hats and Visors','Scarf','Sun Knee','Sun Sleeve','Sweatshirt/Hoodie','Swim Wear','T-Shirt'],
+  CR:['Belt Drive Ring','BMX Bottom Bracket','Bottom Bracket','Bottom Bracket Adaptor','Chainguard','Chainring Guard','Chainring Spacer','Crank Arm Fixing Bolt','Crank Spider','Cup Conversion Kit','Direct Mount Chainrings','Dust Cap','Internally Geared Crank Part','One-Piece Crankset','Pedal Washer','Right Crank Arm','Spindle','Sprocket','Sprocket Adaptor','Sprocket Grind Guard'],
+  CU:['Custom Wheels'],
+  CW:['Custom Nipples','Custom Spokes','Custom Wheel Intended Use','Labor','Lacing','Offset','Wheel Type'],
+  CY:['Battery Charger Cable','Cable Kit','Charger Accessory','Computer Accessories','Cycling Computer','E-Tubes, Cables & Extensions','Electronic Shifter Part, SRAM','Extra Parts','Interface Unit','Junction Box','Magnet','Power Unit','Shifter Battery Charger'],
+  DG:['Disc Golf','Disc Golf Display'],
+  DP:['Cable Anchor Assembly','Cable Fixing Assembly','Cage Assembly','Front Derailleur Adaptor','Miscellaneous Rear Derailleur Part','Pulley Assembly','Pulley Bolt','Upper Bolt and Spring'],
+  DS:['Fixtures & Accessories','Helmet Display','Pedal Display','Rack, Display/Storage','Retail Store Fixture and Accessory','Zip Tie'],
+  EB:['Bars','Chew','Gel','Recovery','Snack','Sport Fuel','Sport Hydration','Supplement and Mineral','Waffle'],
+  EC:['Cadence/Speed Sensor','Camera Mounts','Computer Mount Kit/Adapter','Device Charger','Fitness Computer','Heart Rate Straps and Accessories','Music Device Accessory','Smart Phone Accessory'],
+  EW:['Eyewear Display','Goggle','Safety Glasses','Sunglasses'],
+  FC:['Gaiter','Shoe Cover'],
+  FD:['Front Derailleur','Miscellaneous Front Derailleur Part'],
+  FE:['Clip-On Fender','Fender Part','Full Coverage Fender'],
+  FK:['Adjuster Knob & External Hardware','Air Springs & Parts','Axles & Axle Parts','BMX Fork','Brake Posts','Coil Springs & Parts','Crown/Steerer/Uppertube Assembly','Cyclocross/Hybrid Fork','Damper, Compression','Damper, Rebound','Eyelet Bushings','Lowers & Bushing Sets','Other Fork Part','Rebound Damper Parts','Remote Upgrade Kits','Remotes & Parts','Rigid Mountain Fork','Road Fork','Seal Kit','Service Kit','Spring Kit','Suspension Data Acquisition','Suspension Fork','Thru Axle & Skewer Part','Top Cap'],
+  FL:['Flag'],
+  FM:['All-Road Frame','BMX Frame','Cargo Frame','Cyclocross Frame','Dirt Jump Frame','Fat Bike Frame','Mountain Frame','Road Frame','Touring Frame','Track Frame'],
+  FS:['Derailleur Hanger','Derailleur Hanger Hardware','Dropout','Eccentric','Miscellaneous Frame Supplies','Suspension Part','Thru Axle Trailer Hitch Adaptor'],
+  FW:['Belt Drive Cog','Cassette','Cassette Cog','Cassette Lockring','Cassette Spacer','Driver and Single Cog','Freehub Body','Multi-Speed Freewheel','Range Extending Cassette Cogs','Single Speed Spacer Kit','Single-Speed Freewheel','Spoke Protector','Track Cog','Track Cog Lockring'],
+  GL:['Glove','Glove Liner'],
+  HB:['Aero Bar Extensions','Aero Bar Part','Bar End','BMX Handlebar','Clip-On Aero Bar','Cruiser/Multi-Position Handlebar','Drop Handlebar','Flat/Riser Handlebar','Handlebar Accessory Mount','Integrated Handlebar/Aero Bar','Mustache Bar','TT and Base Bar'],
+  HD:['Compression Plug','Crown Race','Headset','Headset Lower','Headset Seal','Headset Small Part','Headset Stack Spacer','Headset Stack Spacer Dealer Kit','Headset Tool','Headset Top Cap','Headset Upper','Headtube Adaptor'],
+  HE:['Helmet','Helmet Accessory','Helmet Part'],
+  HT:['Bar End Plug','Bar Tape','Bicycle Streamer','Finishing Tape','Grip','Grip Donut','Locking Grip Clamp','Pogies','Track Grip','Under-Tape Pad'],
+  HU:['Axle','Axle Set','BMX Hub Guard','BMX Hubs','BMX Peg','Cone','Cone Kit','Drop Ship Front Hub','Drop Ship Rear Hub','Front Axle Conversion Kit','Front Hub','Hub Set','Internally Geared Hub','Internally Geared Hub Part','Items to be categorized','Other Hub Part','Peg Sleeve','Rear Axle Conversion Kit','Rear Hub','Thru Axle'],
+  JK:['Jackets','Vest'],
+  JT:['Custom Apparel','Jersey','Multi-Sport Top','Running Top'],
+  KI:['Kickstand','Kickstand Part'],
+  KT:['Custom Kits','Kit in a Box','Kit-In-A-Box Mtn Group','Kit-In-A-Box Road Group'],
+  LB:['Leg Band'],
+  LD:['Brake/Shift Lever, Drop Bar Pair','Brake/Shift Lever, Drop Bar-Left','Brake/Shift Lever, Drop Bar-Right','Brake/Shift Lever, Flat Bar Pair','Brake/Shift Lever, Flat Bar-Left','Brake/Shift Lever, Flat Bar-Right','Hydraulic Brake/Shift Lever, Drop Bar','Internally Geared Hub Shifter','Mountain Shifter Part','Remote Shifter','Road Shifter Part','Shifter, Flat Bar-Left','Shifter, Flat Bar-Pair','Shifter, Flat Bar-Right','Shifter, Road','Thumb Shifter Conversion Kit','TT/Reverse Brake/Shift Lever, Left','TT/Reverse Brake/Shift Lever, Pair','TT/Reverse Brake/Shift Lever, Right'],
+  LK:['Bracket/Accessory','Cable Lock','Chain Lock','Folding Lock','Padlock','U-Lock','Wheel/Frame Lock'],
+  LT:['Dynamo & Generator Light','Ebike Light','Headlight','Headlight & Taillight Set','Headlight, Rechargeable','Light Part','Safety Light','Taillight'],
+  LU:['Anti-Fog','Assembly Compound','Cleaning Tool','Cutting Oil','Degreaser / Cleaner','Disc Brake Fluid','Fork Oil and Lube','Grease','Hand Cleaner','Lubricant','Lubricant, Lube Tool, Cleaner Display','Polish','Rust Inhibitor','Tube Sealant','Tubeless Sealant'],
+  MA:['Authorized Dealer Display','Bike Fitting','Bike Repair/Maintenance Guide','Branded Sign/Banner','Catalog','Computer/Electronics Display','Dealer Information','DVD/Video','Literature','Map','Poster/Banner','Race Supply','Reflective Stick-on','Repair Tags, Forms & Labels','Rim Part','Sticker/Decal','Tire Display','Training Guide','Tube Display'],
+  MI:['Mirror'],
+  MS:['Nutritional Item Accessory','Running Accessory','Swim Accessory','Swim Cap','Swim Goggle','Swimskins','Towel','Wetsuit'],
+  MX:['BMX Number','BMX Number Plate'],
+  OA:['Apparel Care','Camera Accessory','Camp Accessory','Carabiner / Keychain / Lanyard','Ice Gripper','Lighters and Fire Starters','Other Light','Pocket Knives and Multi-tool','Shoe Care','Slackline','Sunglass Accessories','Survival Tools, Kits and Accessories','Watch Accessory','Wood Saw and Axe'],
+  OB:['Cot','Gear Maintenance','Pillow','Sleeping Bag','Sleeping Pad'],
+  OC:['Camp Tool','Chair','Coffee, Tea, Alcohol','Container','Hammock','Hammock Accessories','Stove','Table','Tableware'],
+  OF:['Cookware','Desserts and Snacks','Entrees'],
+  OH:['Filters and Filter Systems','Water Purification Accessories and Parts','Water Treatment'],
+  OL:['Headlamp','Lanterns','Outdoor Light Parts'],
+  OP:['Trekking Pole','Trekking Pole Parts and Accessories'],
+  OS:['Camp Fuel','Stove Accessory'],
+  OT:['Shelter & Tent Accessories','Shelters'],
+  OW:['Bag Accessories','Cart','Dry Bag/Stuff Sack','Laptop Computer and Tablet Cases','Paddling Safety Equipment','Paddling Storage and Display','Part and Accessory','Small Parts and Accessories'],
+  PD:['Cleat Cover','Cleat Shim','Clipless Cleat','Pedal Flip','Pedal Small Part','Pedals','Platform Clip On'],
+  PG:['Arm Protection','First Responder Assistance','Knee/Leg Protection Sets','Leg Protection','Protective Short','Torso Protection'],
+  PK:['Patch Kit','Tubeless Patch Kit','Tubular Patch Kit','Valve Cap'],
+  PS:['Commercial Rack'],
+  PU:['CO2 and Pressurized Inflation Device','Floor Pump','Frame Pump','Pressure Gauge','Pump Part','Shock Pump','Shop Air Compressor Head','Suspension Pump Accessory','Valve Adaptor','Valve Extender','Valve Part'],
+  QR:['Front QR Skewer','Quick Release Skewer Pair','Rear QR Skewer'],
+  RC:['Tubular Adhesive'],
+  RD:['Cable Adjustment Assembly','Rear Derailleur'],
+  RF:['Reflector','Vest, Reflective'],
+  RK:['Bicycle Mounted Rack Part','Child Carrier','Front Mount Rack','Other Rack','Rack Strap, Tie, & Bungee','Rear Mount Rack','Seatpost Mount Rack'],
+  RM:['CW Rims','Drop Ship Rims','Rim','Spoke Head Washer','Tubeless Valves'],
+  RS:['Rear Shock','Rear Shock Mount Kit','Rear Shock Part','Rear Shock Service Kits','Rear Shock Spring','Rear Shock Tune Kits','Tire Liners','Tubeless Conversion Kits','Tubeless Tape'],
+  RT:['Rim Strips and Tape'],
+  SA:['Saddle','Saddle Care and Part','Saddle Cover'],
+  SB:['Sports Bra'],
+  SH:['Flat Shoe','Foot Bed','Mountain Shoes','Road Shoes','Sandals','Shoe Part and Accessory','Tri Shoes','Winter / Boot'],
+  SK:['Compression Sock','Sock'],
+  SM:['BMX Stems','Expander Bolt','Handlebar Clamp Shim','Steerer Extender','Steerer Tube Shim','Stem','Stem Column Adaptor','Stem Small Part','Tandem Stoker Stem'],
+  SP:['Spoke Nipple','Spoke Nipple Washer'],
+  SQ:['Spoke'],
+  ST:['Dropper Seatpost','Dropper Seatpost Part','Dropper Seatpost Remote','Rear Cable Hanger','Saddle Clamp','Seatpost','Seatpost Binder Bolt','Seatpost Clamp','Seatpost Part','Seatpost Shim','Suspension Seatpost'],
+  TA:['Anti Chafe','Body Cleanser/Hygiene','Body/Skin Care','Embrocation','First Aid Kit','Hair Care','Hair Removal','Heating Pack','Insect Bite Relief and Repellent','Lip Balm','Performance Therapy','Sunscreen','Wound and Skin Care'],
+  TC:['Toe Clip & Strap'],
+  TL:['Adjustable Wrench','Axle Spacer','Bearing Tool','Belt Drive Tool','Beverage Essentials','Bike Multi-Tool','Bottom Bracket Tapping & Facing Tool','Bottom Bracket Tool','Brake Tool','Cable Cutter','Cable Puller','Chain Tool','Chain Tool Replacement Pin','Chain Whip & Cog Holder','Chainring Tool','Combination Wrench','Cone Wrench','Crank Arm Tool','Disc Hose Tool','Dishing Gauge','Dropout Saver','File','Frame Tool','Freehub & Cog Tool','Freewheel Tool','Freewheel/BB Shim','Hacksaw','Hacksaw Blade','Hammer','Head & Steerer Tube Cutting Tool','Hex Wrench','Injector & Dispenser','Kitchen Essentials','Measurement Tool','Measuring Tool','Miscellaneous Shop Supply','Miscellaneous Spoke Tool','Other Hub Tool','Other Tool','Pedal Tool','Pedal Wrench','Plier','Ratchets & Bits','Repair Stand','Repair Stand Accessory','Repair Stand Replacement Part','Rivet Nutter','Screwdriver','Seatpost/Tube Cutting Tool','Snap Ring Plier','Spoke Length Calculation Kit','Spoke Tensiometer','Spoke Wrench','Suspension Tool','Taps','Thread Repair','Tire Lever','Tool & Repair Display','Tool Kit','Torque Wrench','Torx Wrench','Tread Cutter','Truing Stand','Truing Stand Accessory','Truing Stand Part','Tube & Tire Care Product','Tubing Cutter','Valve Tool','Wear Indicator','Work Bench','Y-Wrench'],
+  TR:['Tire','Tire Studs and Tool','Trainer Tire','Tubeless System Enhancements'],
+  TU:['Tube'],
+  TW:['Balance Bike','Training Handle','Training Wheel'],
+  WB:['Aero Water Bottle','Bottle Cage Storage','Hydration Pack','Hydration Pack Care Product','Replacement Reservoir','Water Bottle','Water Bottle Display','Water Bottle Part and Accessory','Water Pack Part'],
+  WC:['CO2 and Pressurized Cartridge','Water Bottle Cage','Water Bottle Cage Hardware'],
+  WE:['Balance Bike Parts and Accessories','Front Wheel','Rear Wheel','Spoke Kit','Wheelset'],
+  WT:['Rear Wheel Trainer','Roller','Trainer Accessories','Trainer Part'],
+  XS:['Snowshoe','Snowshoe Accessory'],
+};
+
+const container = document.getElementById('tableContainer');
+const noResults = document.getElementById('noResults');
+const resultsCount = document.getElementById('resultsCount');
+const searchInput = document.getElementById('searchInput');
+const clearBtn = document.getElementById('clearBtn');
+const expandAllBtn = document.getElementById('expandAllBtn');
+let allExpanded = false;
+
+document.getElementById('totalCount').textContent = shortList.length;
+
+function esc(s){ return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function highlight(text, query) {
+  if (!query) return esc(text);
+  const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
+  return esc(text).replace(re, '<mark>$1</mark>');
+}
+
+function render(query) {
+  const q = (query || '').trim().toLowerCase();
+  container.innerHTML = '';
+  let count = 0;
+
+  shortList.forEach(item => {
+    const subList = subs[item.p] || [];
+    const matchPrefix = item.p.toLowerCase().includes(q);
+    const matchCat = item.c.toLowerCase().includes(q);
+    const matchSub = subList.some(s => s.toLowerCase().includes(q));
+    if (q && !matchPrefix && !matchCat && !matchSub) return;
+    count++;
+
+    const row = document.createElement('div');
+    row.className = 'prefix-row';
+    row.dataset.prefix = item.p;
+
+    const subCount = subList.length;
+    const subHTML = subList.map(s => `<span class="subcat-tag">${highlight(s, q)}</span>`).join('');
+
+    row.innerHTML = `
+      <div class="row-main">
+        <span class="prefix-badge">${esc(item.p)}</span>
+        <span class="row-category">${highlight(item.c, q)}</span>
+        ${subCount > 0 ? `<span class="row-meta">${subCount} subcategorie${subCount !== 1 ? 's' : ''}</span>` : ''}
+        ${subCount > 0 ? `<span class="row-arrow"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>` : '<span class="row-arrow" style="width:14px"></span>'}
+      </div>
+      ${subCount > 0 ? `<div class="subcategory-panel"><div class="subcat-label">Subcategories</div><div class="subcat-grid">${subHTML}</div></div>` : ''}
+    `;
+
+    if (subCount > 0) {
+      row.addEventListener('click', () => row.classList.toggle('expanded'));
+      // Auto-expand when searching
+      if (q && (matchSub || matchPrefix || matchCat)) row.classList.add('expanded');
+    }
+
+    container.appendChild(row);
+  });
+
+  const showing = q ? `Showing <strong>${count}</strong> of ${shortList.length}` : `<strong>${count}</strong> prefixes total`;
+  resultsCount.innerHTML = showing;
+  noResults.style.display = count === 0 ? 'block' : 'none';
+  container.style.display = count === 0 ? 'none' : '';
+}
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value;
+  clearBtn.style.display = q ? 'inline-flex' : 'none';
+  render(q);
+  allExpanded = false;
+  expandAllBtn.textContent = 'Expand all';
+});
+
+clearBtn.addEventListener('click', () => {
+  searchInput.value = '';
+  clearBtn.style.display = 'none';
+  render('');
+  searchInput.focus();
+  allExpanded = false;
+  expandAllBtn.textContent = 'Expand all';
+});
+
+expandAllBtn.addEventListener('click', () => {
+  allExpanded = !allExpanded;
+  container.querySelectorAll('.prefix-row').forEach(r => {
+    if (allExpanded) r.classList.add('expanded');
+    else r.classList.remove('expanded');
+  });
+  expandAllBtn.textContent = allExpanded ? 'Collapse all' : 'Expand all';
+});
+
+render('');
+</script>
+</body>
+</html>
