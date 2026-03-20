@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKU Search Formatter</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --paper: #f5f2ec;
+    --paper-warm: #ede9df;
+    --rule: #c8bfa8;
+    --rule-light: #e0d9cc;
+    --accent: #b84c1e;
+    --font-body: 'Libre Baskerville', Georgia, serif;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 3px solid var(--accent);
+  }
+  header h1 {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  header .subtitle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 0.08em;
+  }
+  .btn {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border: 1px solid currentColor;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: transparent;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-ghost { color: #aaa; border-color: #444; }
+  .btn-ghost:hover { color: var(--paper); border-color: var(--paper); }
+  .btn-accent { color: var(--accent); border-color: var(--accent); }
+  .btn-accent:hover { background: var(--accent); color: white; }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-primary:hover { background: #9a3e18; }
+  .btn-success { background: #4a9458; color: white; border-color: #4a9458; }
+
+  /* ─── MAIN ─── */
+  main {
+    max-width: 720px;
+    margin: 64px auto;
+    padding: 0 24px;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  h2 {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 8px;
+  }
+  .description {
+    color: #555;
+    font-size: 15px;
+    line-height: 1.7;
+    margin-bottom: 32px;
+  }
+
+  /* ─── PANELS ─── */
+  .panel-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 8px;
+  }
+
+  textarea {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 16px;
+    border: 2px solid var(--rule);
+    background: white;
+    color: var(--ink);
+    resize: vertical;
+    outline: none;
+    line-height: 1.7;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: #aaa; }
+
+  #skuInput { height: 220px; }
+  #outputArea {
+    height: 100px;
+    background: var(--paper-warm);
+    border-color: var(--rule-light);
+    cursor: text;
+  }
+
+  .action-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .count-pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--paper-warm);
+    border: 1px solid var(--rule);
+    padding: 5px 12px;
+    color: #666;
+  }
+  .count-pill span { color: var(--ink); font-weight: 500; }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--rule-light);
+    margin: 28px 0;
+  }
+
+  .copy-feedback {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #4a9458;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .copy-feedback.show { opacity: 1; }
+
+  /* ─── INSTRUCTIONS ─── */
+  .how-it-works {
+    background: var(--paper-warm);
+    border: 1px solid var(--rule);
+    padding: 18px 22px;
+    margin-top: 32px;
+  }
+  .how-it-works .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 10px;
+  }
+  .how-it-works ol {
+    padding-left: 18px;
+    font-size: 13px;
+    line-height: 2;
+    color: #555;
+  }
+  .how-it-works code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: white;
+    border: 1px solid var(--rule-light);
+    padding: 1px 5px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SKU Search Formatter</h1>
+    <div class="subtitle">PIM Batch Search &mdash; IN Clause Format</div>
+  </div>
+  <a class="btn btn-ghost" href="../index.html">&larr; All Tools</a>
+</header>
+
+<main>
+  <div class="eyebrow">QBP Content Tools</div>
+  <h2>SKU Search Formatter</h2>
+  <p class="description">
+    Paste a list of SKUs — one per line — and get them formatted for PIM batch search in seconds.
+    No more fussing with Excel.
+  </p>
+
+  <div class="panel-label">Paste SKUs &mdash; one per line</div>
+  <textarea id="skuInput" placeholder="LU0153&#10;LU0154&#10;LU0155&#10;LU0156&#10;..." spellcheck="false"></textarea>
+
+  <div class="action-row">
+    <button class="btn btn-primary" onclick="formatSkus()">Format SKUs</button>
+    <div class="count-pill" id="countPill">Paste SKUs above to begin</div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="panel-label">Formatted output &mdash; ready to paste into PIM</div>
+  <textarea id="outputArea" readonly placeholder="Formatted SKUs will appear here..."></textarea>
+
+  <div class="action-row">
+    <button class="btn btn-accent" onclick="copyOutput()" id="copyBtn">Copy to Clipboard</button>
+    <button class="btn btn-ghost" onclick="clearAll()">Clear</button>
+    <span class="copy-feedback" id="copyFeedback">Copied!</span>
+  </div>
+
+  <div class="how-it-works">
+    <div class="label">How it works</div>
+    <ol>
+      <li>Paste your SKU list from Excel, a report, or anywhere else — one SKU per line.</li>
+      <li>Click <strong>Format SKUs</strong>. Blank lines and extra spaces are ignored automatically.</li>
+      <li>Copy the result and paste directly into the PIM batch search field: <code>'LU0153','LU0154','LU0155'</code></li>
+    </ol>
+  </div>
+</main>
+
+<script>
+  const input = document.getElementById('skuInput');
+  const output = document.getElementById('outputArea');
+  const countPill = document.getElementById('countPill');
+
+  input.addEventListener('input', updateCount);
+
+  function updateCount() {
+    const skus = getSkus();
+    if (skus.length === 0) {
+      countPill.innerHTML = 'Paste SKUs above to begin';
+    } else {
+      countPill.innerHTML = '<span>' + skus.length + '</span> SKU' + (skus.length !== 1 ? 's' : '') + ' detected';
+    }
+  }
+
+  function getSkus() {
+    return input.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  function formatSkus() {
+    const skus = getSkus();
+    if (skus.length === 0) {
+      output.value = '';
+      return;
+    }
+    output.value = skus.map(s => "'" + s + "'").join(',');
+  }
+
+  function copyOutput() {
+    if (!output.value) return;
+    navigator.clipboard.writeText(output.value).then(function() {
+      const fb = document.getElementById('copyFeedback');
+      fb.classList.add('show');
+      setTimeout(function() { fb.classList.remove('show'); }, 2000);
+    });
+  }
+
+  function clearAll() {
+    input.value = '';
+    output.value = '';
+    countPill.innerHTML = 'Paste SKUs above to begin';
+  }
+</script>
+
+</body>
+</html>
