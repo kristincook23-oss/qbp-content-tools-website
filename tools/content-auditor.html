@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QBP Content Auditor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  #topbar { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
+  #topbar p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+  #topbar-actions { display: flex; gap: 8px; }
+  #body { padding: 16px 20px; }
+  .card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 20px; }
+  button { padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; transition: opacity 0.1s; }
+  button:hover { opacity: 0.8; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-dark { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+  .btn-purple { background: #6366f1; color: #fff; border: none; }
+  .btn-green { background: #22c55e; color: #fff; border: none; }
+  .btn-red-outline { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+  .btn-red-solid { background: #ef4444; color: #fff; border: none; }
+  .btn-green-outline { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+  .btn-green-solid { background: #22c55e; color: #fff; border: none; }
+  .btn-muted { background: #f1efea; color: #5f5e5a; border-color: #d3d1c7; }
+  #upload-zone { display: flex; justify-content: center; padding-top: 40px; }
+  #drop-area { border: 2px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 60px 80px; text-align: center; cursor: pointer; background: #fff; max-width: 480px; width: 100%; transition: border-color 0.2s; }
+  #drop-area:hover, #drop-area.drag-over { border-color: #6366f1; }
+  #drop-area .icon { font-size: 40px; margin-bottom: 12px; }
+  #drop-area h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+  #drop-area p { margin: 0; font-size: 13px; color: #888; line-height: 1.6; }
+  #api-key-bar { background: #fffbeb; border-bottom: 1px solid #fcd34d; padding: 10px 20px; display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; }
+  #api-key-bar label { color: #92400e; font-weight: 500; white-space: nowrap; }
+  #api-key-input { flex: 1; min-width: 260px; max-width: 420px; padding: 6px 10px; border-radius: 6px; border: 0.5px solid #fcd34d; background: #fff; font-family: monospace; font-size: 12px; color: #1a1a1a; }
+  #api-key-input:focus { outline: 2px solid #f59e0b; border-color: transparent; }
+  .key-saved { color: #15803d; font-size: 12px; display: none; }
+  .key-note { color: #92400e; font-size: 12px; opacity: 0.8; }
+  #summary-cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: #fff; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.12); padding: 14px; text-align: center; cursor: pointer; transition: border 0.15s; }
+  .summary-card.active { border-width: 2px; }
+  .summary-card .num { font-size: 26px; font-weight: 500; }
+  .summary-card .lbl { font-size: 12px; color: #888; margin-top: 2px; }
+  #toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  #progress-wrap { height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; margin-bottom: 12px; overflow: hidden; display: none; }
+  #progress-bar { height: 100%; background: #6366f1; width: 0%; transition: width 0.3s; }
+  #table-wrap { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f5f5f3; border-bottom: 0.5px solid rgba(0,0,0,0.15); }
+  th { padding: 10px 12px; text-align: left; font-weight: 500; white-space: nowrap; }
+  tbody tr { border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr.selected { background: #f5f3ff; }
+  td { padding: 8px 12px; vertical-align: middle; }
+  .sku-cell { font-family: monospace; font-size: 11px; color: #666; }
+  .name-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num-cell { text-align: center; }
+  .num-bad { color: #ef4444; font-weight: 500; }
+  .grade-dot { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 500; font-size: 13px; }
+  .flag-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin: 1px 2px 1px 0; white-space: nowrap; }
+  .flag-error { background: #fef2f2; color: #b91c1c; border: 0.5px solid #fca5a5; }
+  .flag-warn { background: #fffbeb; color: #b45309; border: 0.5px solid #fcd34d; }
+  .status-accepted { color: #15803d; font-weight: 500; font-size: 11px; }
+  .status-kept { color: #b91c1c; font-weight: 500; font-size: 11px; }
+  .status-pending { color: #6366f1; font-weight: 500; font-size: 11px; }
+  #review-view { display: none; }
+  #review-header { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #review-header h1 { margin: 0; font-size: 16px; font-weight: 500; }
+  #review-header p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+  #dot-progress { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .dot-seg { height: 6px; width: 24px; border-radius: 3px; cursor: pointer; background: rgba(0,0,0,0.15); transition: background 0.15s; }
+  #review-product-card { border-left: 3px solid #6366f1; margin-bottom: 14px; }
+  #review-product-card .sku-line { font-size: 11px; color: #888; margin-bottom: 3px; }
+  #review-product-card .name-line { font-weight: 500; font-size: 15px; }
+  #review-product-card .meta-line { font-size: 12px; color: #888; margin-top: 2px; }
+  #compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .compare-col { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 20px; }
+  .compare-col.new-col { border: 1.5px solid #86efac; }
+  .col-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; margin-bottom: 14px; }
+  .badge-orig { background: #fef2f2; color: #b91c1c; }
+  .badge-new { background: #f0fdf4; color: #15803d; }
+  .field-label { font-size: 11px; color: #888; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .orig-text { font-size: 13px; line-height: 1.65; background: #f5f5f3; padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; min-height: 60px; color: #1a1a1a; }
+  .orig-bullets { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+  textarea.edit-field { width: 100%; font-size: 13px; line-height: 1.65; padding: 10px 12px; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.2); background: #f5f5f3; color: #1a1a1a; resize: vertical; font-family: inherit; margin-bottom: 10px; }
+  textarea.edit-field:focus { outline: 2px solid #6366f1; border-color: transparent; }
+  #bullet-preview { font-size: 11px; color: #888; }
+  #bullet-preview span { display: block; padding-left: 10px; }
+  #review-actions { display: flex; gap: 10px; justify-content: center; align-items: center; }
+  #review-actions .big-btn { padding: 10px 28px; font-size: 13px; }
+  @media (max-width: 700px) {
+    #compare-grid { grid-template-columns: 1fr; }
+    #summary-cards { grid-template-columns: repeat(3, 1fr); }
+    #drop-area { padding: 40px 20px; }
+  }
+</style>
+</head>
+<body>
+<div id="api-key-bar">
+  <label for="api-key-input">Claude API Key</label>
+  <input id="api-key-input" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveKey(this.value)" />
+  <span class="key-saved" id="key-saved">&#10003; Key saved</span>
+  <span class="key-note">Required for rewriting. Grading works without it. Key stays in your browser only.</span>
+</div>
+<div id="table-view">
+  <div id="topbar">
+    <div>
+      <h1>QBP Content Auditor</h1>
+      <p id="topbar-sub">Grade, flag, and rewrite legacy product content</p>
+    </div>
+    <div id="topbar-actions">
+      <button class="btn-dark" id="btn-review-top" style="display:none" onclick="showReview()">Review rewrites →</button>
+      <button class="btn-dark" id="btn-new-file" style="display:none" onclick="reset()">New file</button>
+    </div>
+  </div>
+  <div id="body">
+    <div id="upload-zone">
+      <div id="drop-area" onclick="document.getElementById('file-input').click()"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event)">
+        <div class="icon">📊</div>
+        <h2>Upload PIM Export</h2>
+        <p>Drop an .xlsx file here or click to browse<br>Expects: SKU, Name, Brand description, Taxonomy Node,<br>Model Description, Model Bullet Text</p>
+        <input id="file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+      </div>
+    </div>
+    <div id="main-content" style="display:none">
+      <div id="summary-cards"></div>
+      <div id="toolbar"></div>
+      <div id="progress-wrap"><div id="progress-bar"></div></div>
+      <div id="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"></th>
+              <th style="width:56px">Grade</th>
+              <th style="width:80px">SKU</th>
+              <th>Name</th>
+              <th class="num-cell" style="width:56px">Words</th>
+              <th class="num-cell" style="width:60px">Bullets</th>
+              <th>Flags</th>
+              <th style="width:90px; text-align:center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="review-view">
+  <div id="review-header">
+    <div>
+      <h1>Side-by-side review</h1>
+      <p id="review-sub">0 of 0</p>
+    </div>
+    <div style="display:flex; gap:8px">
+      <button class="btn-dark" onclick="showTable()">← Back to table</button>
+      <button class="btn-green" id="btn-export" style="display:none" onclick="exportXLSX()">Export results ↓</button>
+    </div>
+  </div>
+  <div id="body" style="padding:16px 20px">
+    <div id="dot-progress"></div>
+    <div class="card" id="review-product-card">
+      <div class="sku-line" id="rv-sku"></div>
+      <div class="name-line" id="rv-name"></div>
+      <div class="meta-line" id="rv-meta"></div>
+    </div>
+    <div id="compare-grid">
+      <div class="compare-col">
+        <div class="col-badge badge-orig">original</div>
+        <div id="orig-flags" style="display:inline-flex; gap:4px; flex-wrap:wrap; margin-bottom:14px; vertical-align:middle; margin-left:6px"></div>
+        <div class="field-label">Description</div>
+        <div class="orig-text" id="orig-desc"></div>
+        <div class="field-label">Bullets</div>
+        <ul class="orig-bullets" id="orig-bullets"></ul>
+      </div>
+      <div class="compare-col new-col">
+        <div class="col-badge badge-new">rewritten — edit before accepting</div>
+        <div class="field-label">Description</div>
+        <textarea class="edit-field" id="edit-desc" rows="5" oninput="syncEdits('desc', this.value)"></textarea>
+        <div class="field-label">Bullets <span style="font-weight:400; text-transform:none; font-size:11px">(tilde-separated)</span></div>
+        <textarea class="edit-field" id="edit-bullets" rows="6" oninput="syncEdits('bullets', this.value); updateBulletPreview()"></textarea>
+        <div id="bullet-preview"></div>
+      </div>
+    </div>
+    <div id="review-actions">
+      <button class="btn-muted" id="btn-prev" onclick="moveReview(-1)">← Prev</button>
+      <button class="btn-red-outline big-btn" id="btn-keep" onclick="decide('reject')">✗ Keep original</button>
+      <button class="btn-green-outline big-btn" id="btn-accept" onclick="decide('accept')">✓ Accept rewrite</button>
+      <button class="btn-muted" id="btn-next" onclick="moveReview(1)">Next →</button>
+    </div>
+  </div>
+</div>
+<script>
+let rows = [], grades = [], rewrites = {}, edits = {}, decisions = {};
+let activeFilter = 'all';
+let selected = new Set();
+let reviewItems = [], reviewIdx = 0;
+function getApiKey() { return document.getElementById('api-key-input').value.trim(); }
+function saveKey(val) { document.getElementById('key-saved').style.display = val.startsWith('sk-') ? 'inline' : 'none'; }
+const FIRST_PERSON = /\b(we|our|i|my|us|ours|we've|we're|we'll|i'm|i've|i'll)\b/gi;
+const COLLOQUIAL = /\b(pardner|howdy|saddle up|y'all|gonna|wanna|gotta|revolutionary|best ever|world['']s best|unmatched|unrivaled|game.?changing|industry.?leading)\b/gi;
+const G = { A:{color:'#22c55e'}, B:{color:'#3b82f6'}, C:{color:'#f59e0b'}, F:{color:'#ef4444'} };
+function gradeRow(row) {
+  const desc = (row['Model Description'] || '').trim();
+  const bulletRaw = (row['Model Bullet Text'] || '').trim();
+  const bullets = bulletRaw ? bulletRaw.split('~').filter(b => b.trim()) : [];
+  const words = desc ? desc.split(/\s+/).filter(Boolean) : [];
+  const sentences = desc ? desc.split(/[.!?]+/).filter(s => s.trim()) : [];
+  const flags = []; let score = 100;
+  if (!desc) { flags.push({sev:'error',text:'No description'}); score -= 60; }
+  else if (words.length < 25) { flags.push({sev:'error',text:`Too short: ${words.length} words`}); score -= 35; }
+  else if (sentences.length < 2) { flags.push({sev:'warn',text:'Only 1 sentence (aim for 2–5)'}); score -= 15; }
+  else if (sentences.length > 5) { flags.push({sev:'warn',text:`${sentences.length} sentences (max 5)`}); score -= 10; }
+  FIRST_PERSON.lastIndex = 0; COLLOQUIAL.lastIndex = 0;
+  if (FIRST_PERSON.test(desc + ' ' + bulletRaw)) { flags.push({sev:'error',text:'First-person language'}); score -= 40; }
+  if (COLLOQUIAL.test(desc)) { flags.push({sev:'warn',text:'Off-brand / copy-paste language'}); score -= 25; }
+  if (!bulletRaw) { flags.push({sev:'error',text:'No bullets'}); score -= 30; }
+  else if (bullets.length < 3) { flags.push({sev:'error',text:`Only ${bullets.length} bullet${bullets.length===1?'':'s'} (min 3)`}); score -= 20; }
+  score = Math.max(0, score);
+  const letter = flags.length === 0 ? 'A' : score >= 75 ? 'B' : score >= 50 ? 'C' : 'F';
+  return { letter, flags, words: words.length, sentences: sentences.length, bulletCount: bullets.length };
+}
+function handleDrop(e) { e.preventDefault(); document.getElementById('drop-area').classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, {type:'array'});
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    grades = rows.map(gradeRow);
+    rewrites = {}; edits = {}; decisions = {}; selected = new Set(); activeFilter = 'all';
+    document.getElementById('upload-zone').style.display = 'none';
+    document.getElementById('main-content').style.display = 'block';
+    document.getElementById('btn-new-file').style.display = 'inline-block';
+    document.getElementById('topbar-sub').textContent = rows.length + ' SKUs loaded';
+    renderAll();
+  };
+  reader.readAsArrayBuffer(file);
+}
+function reset() {
+  rows = []; grades = []; rewrites = {}; edits = {}; decisions = {}; selected = new Set();
+  document.getElementById('upload-zone').style.display = 'flex';
+  document.getElementById('main-content').style.display = 'none';
+  document.getElementById('btn-new-file').style.display = 'none';
+  document.getElementById('btn-review-top').style.display = 'none';
+  document.getElementById('topbar-sub').textContent = 'Grade, flag, and rewrite legacy product content';
+}
+function renderAll() { renderSummaryCards(); renderToolbar(); renderTable(); }
+function renderSummaryCards() {
+  const counts = {A:0,B:0,C:0,F:0};
+  grades.forEach(g => counts[g.letter]++);
+  const items = [['all','Total',rows.length,'#6366f1'],['A','Grade A',counts.A,G.A.color],['B','Grade B',counts.B,G.B.color],['C','Grade C',counts.C,G.C.color],['F','Grade F',counts.F,G.F.color]];
+  document.getElementById('summary-cards').innerHTML = items.map(([key,lbl,n,color]) =>
+    `<div class="summary-card ${activeFilter===key?'active':''}" style="${activeFilter===key?'border-color:'+color+';':''}" onclick="setFilter('${key}')"><div class="num" style="color:${color}">${n}</div><div class="lbl">${lbl}</div></div>`).join('');
+}
+function setFilter(f) { activeFilter = f; renderAll(); }
+function getVisible() { return rows.map((r,i) => ({r,g:grades[i],i})).filter(({g}) => activeFilter==='all' || g.letter===activeFilter); }
+function renderToolbar() {
+  const counts = {A:0,B:0,C:0,F:0}; grades.forEach(g => counts[g.letter]++);
+  const failCount = (counts.C||0)+(counts.F||0);
+  document.getElementById('toolbar').innerHTML = `
+    <button class="btn-muted" onclick="selectFailing()">Select all C + F (${failCount})</button>
+    <button class="btn-muted" onclick="selectVisible()">Select visible (${getVisible().length})</button>
+    <button class="btn-muted" onclick="clearSelection()">Clear</button>
+    <span style="font-size:12px;color:#666">${selected.size > 0 ? selected.size+' selected' : ''}</span>
+    ${selected.size > 0 ? `<button class="btn-purple" id="btn-rewrite" onclick="runRewrites()">✨ Rewrite selected (${selected.size})</button>` : ''}
+    ${Object.keys(rewrites).length > 0 ? `<button class="btn-green" onclick="showReview()">Review rewrites →</button>` : ''}`;
+}
+function renderTable() {
+  document.getElementById('table-body').innerHTML = getVisible().map(({r,g,i}) => {
+    const dec = decisions[i];
+    return `<tr class="${selected.has(i)?'selected':''}" id="row-${i}">
+      <td><input type="checkbox" ${selected.has(i)?'checked':''} onchange="toggleRow(${i},this.checked)"></td>
+      <td><div class="grade-dot" style="background:${G[g.letter].color}">${g.letter}</div></td>
+      <td class="sku-cell">${r.SKU||''}</td>
+      <td class="name-cell" title="${(r.Name||'').replace(/"/g,'&quot;')}">${r.Name||''}</td>
+      <td class="num-cell ${g.words<25?'num-bad':''}">${g.words}</td>
+      <td class="num-cell ${g.bulletCount<3?'num-bad':''}">${g.bulletCount}</td>
+      <td>${g.flags.map(f=>`<span class="flag-pill flag-${f.sev}">${f.text}</span>`).join('')}</td>
+      <td style="text-align:center">${dec==='accept'?'<span class="status-accepted">✓ Accepted</span>':dec==='reject'?'<span class="status-kept">✗ Kept</span>':rewrites[i]&&!rewrites[i].error?'<span class="status-pending">Pending</span>':''}</td>
+    </tr>`;
+  }).join('');
+}
+function toggleRow(i,checked) { checked?selected.add(i):selected.delete(i); renderAll(); }
+function toggleAll(checked) { getVisible().forEach(({i})=>checked?selected.add(i):selected.delete(i)); renderAll(); }
+function selectFailing() { grades.forEach((g,i)=>{if(g.letter==='F'||g.letter==='C')selected.add(i);}); renderAll(); }
+function selectVisible() { getVisible().forEach(({i})=>selected.add(i)); renderAll(); }
+function clearSelection() { selected.clear(); renderAll(); }
+const SYSTEM_PROMPT = `You are rewriting product descriptions for QBP (Quality Bicycle Products), the largest US bicycle distributor. Content is published on their dealersite, seen by wholesale dealers and consumers.
+VOICE: Professional, neutral, informative. No first-person language ("we," "our," "I," "my," "us"). No exaggerated claims. Industry-standard terminology, simplified when needed.
+MODEL DESCRIPTION RULES:
+- 2–5 complete sentences, 30–70 words
+- Explain what the product is, what it does, who it is for
+- Do not start with the brand name as subject
+- No first-person language
+MODEL BULLETS RULES:
+- Minimum 3 bullets, ideally 4–6, maximum ~8
+- Sentence fragments — one distinct fact, feature, material, or compatibility note per bullet
+- Return as tilde-separated string: bullet1~bullet2~bullet3
+- Do not repeat the description
+BAD: "Voam Saddles designed for upright riders that need addition padding along with wider support."
+BAD: "Saddle up with the Giddyup Wedge Frame Bag... the perfect pardner for whatever adventure lies ahead."
+GOOD: "The Grand Prix 5000 S Tubeless Ready allrounder tires are lighter, faster and supported with stronger sidewalls. Designed to be compatible with hooked and hookless rims, this new standard road tubeless ready technology will allow you to ride faster, more comfortable and with increased puncture protection."`;
+async function runRewrites() {
+  const todo = [...selected].filter(i => !rewrites[i]);
+  if (!todo.length) { showReview(); return; }
+  if (!getApiKey()) { alert('Please enter your Claude API key in the yellow bar at the top.'); return; }
+  const btn = document.getElementById('btn-rewrite');
+  if (btn) btn.disabled = true;
+  document.getElementById('progress-wrap').style.display = 'block';
+  for (let x = 0; x < todo.length; x++) {
+    const i = todo[x]; const row = rows[i];
+    setProgress(x / todo.length);
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json','anthropic-version':'2023-06-01','x-api-key':getApiKey(),'anthropic-dangerous-direct-browser-access':'true' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: SYSTEM_PROMPT,
+          messages: [{role:'user',content:`Rewrite this product content. Return ONLY a JSON object — no markdown, no extra text.\n\nProduct name: ${row['Name']||''}\nBrand: ${row['Brand description']||''}\nCategory: ${row['Taxonomy Node']||''}\nCurrent description: ${row['Model Description']||'(none)'}\nCurrent bullets (tilde-separated): ${row['Model Bullet Text']||'(none)'}\n\nReturn exactly: {"description":"...","bullets":"bullet1~bullet2~bullet3"}`}]
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({}));
+        document.getElementById('progress-wrap').style.display = 'none';
+        alert('API error on SKU "' + (row['SKU']||i) + '":\n\n' + ((err.error&&err.error.message)||('HTTP '+res.status)) + '\n\nCheck your API key and try again.');
+        renderAll(); return;
+      }
+      const data = await res.json();
+      const txt = (data.content||[]).map(c=>c.text||'').join('').replace(/```json|```/g,'').trim();
+      const parsed = JSON.parse(txt);
+      rewrites[i] = parsed; edits[i] = {desc:parsed.description, bullets:parsed.bullets};
+    } catch(e) {
+      document.getElementById('progress-wrap').style.display = 'none';
+      alert('Failed on SKU "' + (rows[i]['SKU']||i) + '":\n\n' + e.message);
+      renderAll(); return;
+    }
+    setProgress((x+1) / todo.length);
+  }
+  document.getElementById('progress-wrap').style.display = 'none';
+  setProgress(0);
+  document.getElementById('btn-review-top').style.display = 'inline-block';
+  renderAll(); showReview();
+}
+function setProgress(pct) { document.getElementById('progress-bar').style.width = (pct*100)+'%'; }
+function showTable() { document.getElementById('table-view').style.display='block'; document.getElementById('review-view').style.display='none'; renderAll(); }
+function showReview() {
+  reviewItems = [...selected].filter(i => rewrites[i] && !rewrites[i].error);
+  if (!reviewItems.length) { alert('No completed rewrites to review yet.'); return; }
+  reviewIdx = 0;
+  document.getElementById('table-view').style.display = 'none';
+  document.getElementById('review-view').style.display = 'block';
+  renderReview();
+}
+function renderReview() {
+  const i = reviewItems[reviewIdx]; const row = rows[i]; const g = grades[i]; const edit = edits[i]||{}; const dec = decisions[i];
+  const accepted = Object.values(decisions).filter(d=>d==='accept').length;
+  const kept = Object.values(decisions).filter(d=>d==='reject').length;
+  document.getElementById('review-sub').textContent = `${reviewIdx+1} of ${reviewItems.length} · ${accepted} accepted · ${kept} kept`;
+  document.getElementById('dot-progress').innerHTML = reviewItems.map((ri,xi) => {
+    const d=decisions[ri]; const bg=d==='accept'?'#22c55e':d==='reject'?'#ef4444':xi===reviewIdx?'#6366f1':'rgba(0,0,0,0.15)';
+    return `<div class="dot-seg" style="background:${bg}" onclick="jumpReview(${xi})"></div>`;
+  }).join('');
+  document.getElementById('rv-sku').textContent = `SKU: ${row.SKU||''} · ${row['Taxonomy Node']||''}`;
+  document.getElementById('rv-name').textContent = row.Name||'';
+  document.getElementById('rv-meta').innerHTML = `Grade: <strong style="color:${G[g.letter].color}">${g.letter}</strong> · ${g.words} words · ${g.bulletCount} bullets · ${g.flags.length} flag${g.flags.length!==1?'s':''}`;
+  document.getElementById('orig-flags').innerHTML = g.flags.map(f=>`<span class="flag-pill flag-${f.sev}">${f.text}</span>`).join('');
+  document.getElementById('orig-desc').textContent = rows[i]['Model Description']||'(no description)';
+  const origBullets = (rows[i]['Model Bullet Text']||'').split('~').filter(Boolean);
+  document.getElementById('orig-bullets').innerHTML = origBullets.length ? origBullets.map(b=>`<li>${b}</li>`).join('') : '<li style="color:#888;list-style:none">(no bullets)</li>';
+  document.getElementById('edit-desc').value = edit.desc||'';
+  document.getElementById('edit-bullets').value = edit.bullets||'';
+  updateBulletPreview();
+  document.getElementById('btn-keep').className = `big-btn ${dec==='reject'?'btn-red-solid':'btn-red-outline'}`;
+  document.getElementById('btn-accept').className = `big-btn ${dec==='accept'?'btn-green-solid':'btn-green-outline'}`;
+  document.getElementById('btn-prev').style.visibility = reviewIdx>0?'visible':'hidden';
+  document.getElementById('btn-next').style.visibility = reviewIdx<reviewItems.length-1?'visible':'hidden';
+  document.getElementById('btn-export').style.display = reviewItems.every(ri=>decisions[ri])?'':'none';
+}
+function syncEdits(field,val) { const i=reviewItems[reviewIdx]; if(!edits[i])edits[i]={}; edits[i][field==='desc'?'desc':'bullets']=val; }
+function updateBulletPreview() { const v=document.getElementById('edit-bullets').value; document.getElementById('bullet-preview').innerHTML=v.split('~').filter(b=>b.trim()).map(b=>`<span>• ${b.trim()}</span>`).join(''); }
+function decide(action) { const i=reviewItems[reviewIdx]; decisions[i]=action; renderReview(); if(action==='accept'&&reviewIdx<reviewItems.length-1)setTimeout(()=>moveReview(1),200); }
+function moveReview(dir) { reviewIdx=Math.max(0,Math.min(reviewItems.length-1,reviewIdx+dir)); renderReview(); }
+function jumpReview(xi) { reviewIdx=xi; renderReview(); }
+function exportXLSX() {
+  const today = new Date().toISOString().slice(0,10);
+  const out = rows.map((row,i) => {
+    const d=decisions[i]; const e=edits[i]; const g=grades[i];
+    return {...row,'Model Description':d==='accept'&&e?e.desc:row['Model Description'],'Model Bullet Text':d==='accept'&&e?e.bullets:row['Model Bullet Text'],'_Grade':g.letter,'_Flags':g.flags.map(f=>f.text).join('; '),'_Words':g.words,'_Bullets':g.bulletCount,'_Rewrite Status':d==='accept'?'Accepted':d==='reject'?'Kept original':rewrites[i]?'Pending review':'Not rewritten'};
+  });
+  const log = rows.map((row,i) => {
+    if(decisions[i]!=='accept') return null;
+    const g=grades[i]; const e=edits[i]||{};
+    return {'Date':today,'SKU':row['SKU']||'','Name':row['Name']||'','Brand':row['Brand description']||'','Category':row['Taxonomy Node']||'','Original Grade':g.letter,'Original Flags':g.flags.map(f=>f.text).join('; '),'Words Before':g.words,'Words After':e.desc?e.desc.split(/\s+/).filter(Boolean).length:0,'Bullets Before':g.bulletCount,'Bullets After':e.bullets?e.bullets.split('~').filter(Boolean).length:0,'New Description':e.desc||'','New Bullets':e.bullets||''};
+  }).filter(Boolean);
+  const byGrade={A:0,B:0,C:0,F:0}; grades.forEach(g=>byGrade[g.letter]++);
+  const summary=[{'Metric':'Export Date','Value':today},{'Metric':'Total SKUs in batch','Value':rows.length},{'Metric':'Grade A','Value':byGrade.A},{'Metric':'Grade B','Value':byGrade.B},{'Metric':'Grade C','Value':byGrade.C},{'Metric':'Grade F','Value':byGrade.F},{'Metric':'Rewrites accepted this session','Value':log.length},{'Metric':'Rewrites kept original','Value':Object.values(decisions).filter(d=>d==='reject').length}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(out),'Content Audit');
+  if(log.length) XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(log),'Session Log');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summary),'Session Summary');
+  XLSX.writeFile(wb,'qbp_content_audit_'+today+'.xlsx');
+}
+</script>
+</body>
+</html>
