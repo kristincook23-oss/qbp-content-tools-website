@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QBP Brand Story Builder</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+
+/* API bar */
+#api-bar { background: #fffbeb; border-bottom: 1px solid #fcd34d; padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+#api-bar label { color: #92400e; font-weight: 500; white-space: nowrap; }
+#api-key { flex: 1; min-width: 240px; max-width: 400px; padding: 6px 10px; border-radius: 6px; border: 0.5px solid #fcd34d; background: #fff; font-family: monospace; font-size: 12px; }
+#api-key:focus { outline: 2px solid #f59e0b; border-color: transparent; }
+#key-ok { color: #15803d; font-size: 12px; display: none; }
+.key-note { color: #92400e; font-size: 12px; opacity: 0.8; }
+
+/* Topbar */
+#topbar { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+#topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
+#topbar p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+
+/* Layout */
+#layout { display: grid; grid-template-columns: 380px 1fr; gap: 0; min-height: calc(100vh - 100px); }
+#panel { background: #fff; border-right: 0.5px solid rgba(0,0,0,0.12); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+#output-area { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Panel inputs */
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+input[type=text], textarea, select {
+  width: 100%; padding: 8px 10px; border-radius: 8px;
+  border: 0.5px solid rgba(0,0,0,0.2); background: #f9f9f7;
+  font-family: inherit; font-size: 13px; color: #1a1a1a;
+  transition: border-color 0.15s;
+}
+input[type=text]:focus, textarea:focus, select:focus { outline: 2px solid #6366f1; border-color: transparent; background: #fff; }
+textarea { resize: vertical; line-height: 1.55; }
+
+/* Mode tabs */
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 5px 12px; border-radius: 6px; border: 0.5px solid rgba(0,0,0,0.15); background: #f1efea; font-size: 12px; font-weight: 500; cursor: pointer; color: #555; transition: all 0.1s; }
+.tab.active { background: #6366f1; color: #fff; border-color: transparent; }
+
+/* Buttons */
+button { cursor: pointer; font-family: inherit; font-weight: 500; transition: opacity 0.1s; }
+button:hover { opacity: 0.85; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+#run-btn { width: 100%; padding: 11px; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; margin-top: 4px; }
+#clear-btn { padding: 7px 14px; background: #f1efea; color: #555; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 8px; font-size: 12px; }
+
+/* Progress */
+#progress-wrap { height: 3px; background: rgba(0,0,0,0.1); border-radius: 2px; overflow: hidden; display: none; margin-top: -10px; }
+#progress-bar { height: 100%; background: #6366f1; width: 0%; transition: width 0.3s; }
+
+/* Status */
+#status { font-size: 12px; color: #888; min-height: 18px; }
+#status.running { color: #6366f1; }
+#status.error { color: #ef4444; }
+#status.done { color: #15803d; }
+
+/* Output cards */
+.section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px; }
+
+.brand-overview-card {
+  background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 18px 20px;
+}
+.brand-overview-card .brand-name { font-size: 18px; font-weight: 600; margin-bottom: 10px; color: #1a1a1a; }
+.overview-text { font-size: 13px; line-height: 1.7; color: #333; background: #f5f5f3; padding: 12px 14px; border-radius: 8px; margin-bottom: 10px; white-space: normal; word-wrap: break-word; }
+.copy-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn-copy { padding: 6px 14px; background: #f0fdf4; color: #15803d; border: 0.5px solid #86efac; border-radius: 6px; font-size: 12px; }
+.btn-copy.copied { background: #15803d; color: #fff; border-color: transparent; }
+.btn-copy-all { padding: 6px 14px; background: #eff6ff; color: #1d4ed8; border: 0.5px solid #93c5fd; border-radius: 6px; font-size: 12px; }
+.btn-copy-all.copied { background: #1d4ed8; color: #fff; border-color: transparent; }
+
+.blocks-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.block-card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 18px; }
+.block-headline { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px; }
+.block-bullets { margin: 0 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.8; color: #333; }
+.block-bullets li { margin-bottom: 2px; }
+.html-preview { font-size: 11px; font-family: monospace; background: #f5f5f3; padding: 8px 10px; border-radius: 6px; color: #555; white-space: pre-wrap; word-break: break-all; margin-bottom: 10px; border: 0.5px solid rgba(0,0,0,0.08); }
+
+/* Stream box */
+#stream-card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 20px; display: none; }
+#stream-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px; }
+#stream-box { font-size: 12px; font-family: monospace; white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; color: #333; line-height: 1.5; }
+
+/* Empty state */
+#empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; color: #888; text-align: center; gap: 8px; padding: 60px 20px; }
+#empty-state .icon { font-size: 40px; }
+#empty-state p { font-size: 13px; line-height: 1.6; max-width: 320px; }
+
+/* Divider */
+.divider { border: none; border-top: 0.5px solid rgba(0,0,0,0.1); margin: 4px 0; }
+
+@media (max-width: 800px) {
+  #layout { grid-template-columns: 1fr; }
+  #panel { border-right: none; border-bottom: 0.5px solid rgba(0,0,0,0.12); }
+  .blocks-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="api-bar">
+  <label for="api-key">Claude API Key</label>
+  <input id="api-key" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="checkKey(this.value)" />
+  <span id="key-ok">&#10003; Key saved</span>
+  <span class="key-note">Key stays in your browser only.</span>
+</div>
+
+<div id="topbar">
+  <div>
+    <h1>QBP Brand Story Builder</h1>
+    <p>Generate EE-ready brand story blocks for rich content</p>
+  </div>
+</div>
+
+<div id="layout">
+
+  <!-- Left panel: inputs -->
+  <div id="panel">
+
+    <div class="field-group">
+      <div class="field-label">Brand Name</div>
+      <input type="text" id="brand-name" placeholder="e.g. Continental, Shimano, Wolf Tooth" />
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Source</div>
+      <div class="tabs" style="margin-bottom:6px">
+        <div class="tab active" id="tab-url" onclick="setTab('url')">Brand URL</div>
+        <div class="tab" id="tab-paste" onclick="setTab('paste')">Paste copy</div>
+      </div>
+      <input type="text" id="source-url" placeholder="https://www.continentaltire.com/about" />
+      <textarea id="source-paste" rows="5" placeholder="Paste brand about page, press kit, or any source copy here…" style="display:none"></textarea>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Category Context <span style="font-weight:400;font-size:11px;text-transform:none">(optional)</span></div>
+      <input type="text" id="category" placeholder="e.g. Tires, Drivetrain, Footwear" />
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">QBP Relationship / Notes <span style="font-weight:400;font-size:11px;text-transform:none">(optional)</span></div>
+      <textarea id="notes" rows="3" placeholder="e.g. Premium German tire brand. Known for Black Chili compound. Strong road and gravel presence."></textarea>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Number of content blocks</div>
+      <select id="block-count">
+        <option value="2">2 blocks</option>
+        <option value="3" selected>3 blocks</option>
+        <option value="4">4 blocks</option>
+      </select>
+    </div>
+
+    <hr class="divider">
+
+    <div id="status"></div>
+    <div id="progress-wrap"><div id="progress-bar"></div></div>
+
+    <button id="run-btn" onclick="runBuilder()">✨ Generate Brand Story</button>
+    <button id="clear-btn" style="display:none" onclick="clearAll()">Clear</button>
+
+    <div style="font-size:11px; color:#aaa; line-height:1.6; margin-top:4px;">
+      Outputs: brand intro paragraph + EE-ready content blocks with Copy HTML buttons. Same format as Product Transformer.
+    </div>
+
+  </div>
+
+  <!-- Right: output -->
+  <div id="output-area">
+    <div id="empty-state">
+      <div class="icon">🏷️</div>
+      <p>Enter a brand name and source, then click Generate. Output will appear here with copy buttons for each EE block.</p>
+    </div>
+    <div id="stream-card">
+      <div id="stream-label">Generating…</div>
+      <div id="stream-box"></div>
+    </div>
+    <div id="results"></div>
+  </div>
+
+</div>
+
+<script>
+let currentTab = 'url';
+let generatedHtmlBlocks = {};
+
+function checkKey(v) {
+  document.getElementById('key-ok').style.display = v.startsWith('sk-') ? 'inline' : 'none';
+}
+
+function setTab(tab) {
+  currentTab = tab;
+  document.getElementById('tab-url').classList.toggle('active', tab === 'url');
+  document.getElementById('tab-paste').classList.toggle('active', tab === 'paste');
+  document.getElementById('source-url').style.display = tab === 'url' ? 'block' : 'none';
+  document.getElementById('source-paste').style.display = tab === 'paste' ? 'block' : 'none';
+}
+
+function setStatus(msg, state) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = state || '';
+}
+
+function clearAll() {
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('stream-card').style.display = 'none';
+  document.getElementById('stream-box').textContent = '';
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('clear-btn').style.display = 'none';
+  document.getElementById('brand-name').value = '';
+  document.getElementById('source-url').value = '';
+  document.getElementById('source-paste').value = '';
+  document.getElementById('category').value = '';
+  document.getElementById('notes').value = '';
+  generatedHtmlBlocks = {};
+  setStatus('');
+}
+
+function buildPrompt(brandName, source, category, notes, blockCount) {
+  return `You are a content specialist for QBP (Quality Bicycle Products), the largest US bicycle distributor. Write a brand story for use on their dealersite product pages in Expression Engine.
+
+BRAND: ${brandName}
+CATEGORY CONTEXT: ${category || 'General cycling'}
+NOTES: ${notes || 'None provided'}
+SOURCE: ${source}
+
+OUTPUT FORMAT — output EXACTLY these labeled sections, plain text only, no markdown:
+
+--- BRAND STORY START ---
+
+BRAND OVERVIEW:
+[2–3 sentence brand introduction. Who they are, what they stand for, why dealers and riders trust them. QBP voice: professional, neutral, informative. No first-person. No exaggerated claims.]
+
+${Array.from({length: blockCount}, (_, i) => `BLOCK ${i+1}:
+HEADLINE: [Short punchy headline, 3–6 words, no em-dash inside]
+LINE 1: [Specific fact, feature, or brand value — one clean statement]
+LINE 2: [Specific fact, feature, or brand value — one clean statement]
+LINE 3: [Specific fact, feature, or brand value — one clean statement]`).join('\n\n')}
+
+--- BRAND STORY END ---
+
+RULES:
+- Brand overview: factual, dealer-ready, QBP voice. No "we" or "our". No "innovative", "revolutionary", "world-class".
+- Block headlines: short and punchy. Examples: "German Precision", "Built for Every Road", "Tested at the Tour", "Technology That Lasts"
+- Block lines: specific facts, technologies, materials, heritage details. No filler.
+- Do not invent specs, certifications, or claims not supported by the source.
+- If source is thin, focus on what IS known rather than padding with generics.
+- Output nothing after the closing marker.`;
+}
+
+async function runBuilder() {
+  const key = document.getElementById('api-key').value.trim();
+  const brandName = document.getElementById('brand-name').value.trim();
+  const sourceUrl = document.getElementById('source-url').value.trim();
+  const sourcePaste = document.getElementById('source-paste').value.trim();
+  const category = document.getElementById('category').value.trim();
+  const notes = document.getElementById('notes').value.trim();
+  const blockCount = parseInt(document.getElementById('block-count').value);
+
+  if (!key) { setStatus('Enter your API key first', 'error'); return; }
+  if (!brandName) { setStatus('Brand name is required', 'error'); return; }
+
+  const hasSource = currentTab === 'url' ? !!sourceUrl : !!sourcePaste;
+  const source = currentTab === 'url'
+    ? (sourceUrl ? `Brand website: ${sourceUrl}` : `No URL provided — use your knowledge of ${brandName}`)
+    : (sourcePaste || `No source provided — use your knowledge of ${brandName}`);
+
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('results').innerHTML = '';
+  generatedHtmlBlocks = {};
+
+  const streamCard = document.getElementById('stream-card');
+  const streamBox = document.getElementById('stream-box');
+  streamCard.style.display = 'block';
+  streamBox.textContent = '';
+  document.getElementById('stream-label').textContent = `Generating brand story for ${brandName}…`;
+
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('progress-bar').style.width = '0%';
+  setStatus('Generating…', 'running');
+
+  let fakeProgress = 0;
+  const progressTimer = setInterval(() => {
+    if (fakeProgress < 85) { fakeProgress += (85 - fakeProgress) * 0.05; }
+    document.getElementById('progress-bar').style.width = fakeProgress + '%';
+  }, 200);
+
+  let fullText = '';
+
+  try {
+    const messages = [{
+      role: 'user',
+      content: buildPrompt(brandName, source, category, notes, blockCount)
+    }];
+
+    // If URL mode, also pass URL as context note (Claude can't fetch URLs but we reference it)
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        stream: true,
+        messages
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || 'HTTP ' + res.status);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta && evt.delta.text) {
+            fullText += evt.delta.text;
+            streamBox.textContent = fullText;
+            streamBox.scrollTop = streamBox.scrollHeight;
+          }
+        } catch(e) {}
+      }
+    }
+
+    clearInterval(progressTimer);
+    document.getElementById('progress-bar').style.width = '100%';
+    setTimeout(() => {
+      document.getElementById('progress-wrap').style.display = 'none';
+      document.getElementById('progress-bar').style.width = '0%';
+    }, 500);
+
+    const parsed = parseOutput(fullText, brandName, blockCount);
+    if (parsed) {
+      streamCard.style.display = 'none';
+      renderOutput(parsed, brandName);
+      setStatus('Done — copy HTML blocks below', 'done');
+      document.getElementById('clear-btn').style.display = 'inline-block';
+    } else {
+      setStatus('Generated but could not parse — see raw output above', 'error');
+    }
+
+  } catch(e) {
+    clearInterval(progressTimer);
+    document.getElementById('progress-wrap').style.display = 'none';
+    setStatus('Error: ' + e.message, 'error');
+  }
+
+  document.getElementById('run-btn').disabled = false;
+}
+
+function parseOutput(text, brandName, blockCount) {
+  // Extract overview - everything between BRAND OVERVIEW: and first BLOCK
+  const overviewMatch = text.match(/BRAND OVERVIEW:\s*([\s\S]*?)(?=\nBLOCK\s*1:|$)/i);
+  const overview = overviewMatch ? overviewMatch[1].trim() : '';
+
+  // Extract blocks using a robust line-by-line approach
+  const blocks = [];
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let currentBlock = null;
+  for (const line of lines) {
+    const blockMatch = line.match(/^BLOCK\s*(\d+)\s*:/i);
+    if (blockMatch) {
+      if (currentBlock) blocks.push(currentBlock);
+      currentBlock = { headline: '', lines: [] };
+      continue;
+    }
+    if (!currentBlock) continue;
+
+    const headlineMatch = line.match(/^HEADLINE:\s*(.+)/i);
+    if (headlineMatch) { currentBlock.headline = headlineMatch[1].trim(); continue; }
+
+    const lineMatch = line.match(/^LINE\s*\d+:\s*(.+)/i);
+    if (lineMatch) { currentBlock.lines.push(lineMatch[1].trim()); continue; }
+  }
+  if (currentBlock && currentBlock.headline) blocks.push(currentBlock);
+
+  if (!overview && !blocks.length) return null;
+  return { overview, blocks };
+}
+
+function blockToHtml(block) {
+  const linesHtml = block.lines.map(l => `  <li>${esc(l)}</li>`).join('\n');
+  return `<h2>${esc(block.headline)}</h2>\n<h4><ul>\n${linesHtml}\n</ul></h4>`;
+}
+
+function overviewToHtml(overview) {
+  return `<p>${esc(overview)}</p>`;
+}
+
+function renderOutput(parsed, brandName) {
+  let html = '';
+
+  // Brand overview
+  const overviewHtml = overviewToHtml(parsed.overview);
+  generatedHtmlBlocks['overview'] = overviewHtml;
+
+  html += `<div class="brand-overview-card">
+    <div class="brand-name">${esc(brandName)}</div>
+    <div class="section-label">Brand Overview</div>
+    <div class="overview-text">${esc(parsed.overview)}</div>
+    <div class="html-preview">${esc(overviewHtml)}</div>
+    <div class="copy-row">
+      <button class="btn-copy" data-id="overview" onclick="copyBlock(this)">Copy HTML</button>
+    </div>
+  </div>`;
+
+  // Content blocks
+  html += `<div class="section-label">Content Blocks</div><div class="blocks-grid">`;
+
+  parsed.blocks.forEach((block, i) => {
+    const id = 'block_' + i;
+    const blockHtml = blockToHtml(block);
+    generatedHtmlBlocks[id] = blockHtml;
+
+    const bulletsHtml = block.lines.map(l => `<li>${esc(l)}</li>`).join('');
+
+    html += `<div class="block-card">
+      <div class="block-headline">${esc(block.headline)}</div>
+      <ul class="block-bullets">${bulletsHtml}</ul>
+      <div class="html-preview">${esc(blockHtml)}</div>
+      <button class="btn-copy" data-id="${id}" onclick="copyBlock(this)">Copy HTML</button>
+    </div>`;
+  });
+
+  html += `</div>`;
+
+  // Copy all button
+  html += `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+    <button class="btn-copy-all" onclick="copyAll(this)">Copy all blocks as HTML</button>
+  </div>`;
+
+  document.getElementById('results').innerHTML = html;
+}
+
+function copyBlock(btn) {
+  const id = btn.getAttribute('data-id');
+  const html = generatedHtmlBlocks[id];
+  if (!html) return;
+  navigator.clipboard.writeText(html).then(() => {
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy HTML'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => fallbackCopy(html, btn, 'Copy HTML'));
+}
+
+function copyAll(btn) {
+  const allHtml = Object.values(generatedHtmlBlocks).join('\n\n');
+  navigator.clipboard.writeText(allHtml).then(() => {
+    btn.textContent = '✓ Copied all';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy all blocks as HTML'; btn.classList.remove('copied'); }, 2500);
+  }).catch(() => fallbackCopy(allHtml, btn, 'Copy all blocks as HTML'));
+}
+
+function fallbackCopy(text, btn, resetLabel) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+  document.body.removeChild(ta);
+  btn.textContent = '✓ Copied'; btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = resetLabel; btn.classList.remove('copied'); }, 2000);
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
