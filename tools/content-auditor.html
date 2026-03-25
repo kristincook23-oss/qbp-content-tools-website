@@ -25,12 +25,15 @@
   .btn-green-outline { background: #f0fdf4; color: #15803d; border-color: #86efac; }
   .btn-green-solid { background: #22c55e; color: #fff; border: none; }
   .btn-muted { background: #f1efea; color: #5f5e5a; border-color: #d3d1c7; }
-  #upload-zone { display: flex; justify-content: center; padding-top: 40px; }
-  #drop-area { border: 2px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 60px 80px; text-align: center; cursor: pointer; background: #fff; max-width: 480px; width: 100%; transition: border-color 0.2s; }
+  #upload-zone { display: flex; flex-direction: column; align-items: center; padding-top: 40px; padding-bottom: 40px; }
+  #drop-area, #drop-area-cr { border: 2px dashed rgba(0,0,0,0.2); border-radius: 12px; text-align: center; cursor: pointer; background: #fff; width: 100%; transition: border-color 0.2s, background 0.2s; }
   #drop-area:hover, #drop-area.drag-over { border-color: #6366f1; }
-  #drop-area .icon { font-size: 40px; margin-bottom: 12px; }
-  #drop-area h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
-  #drop-area p { margin: 0; font-size: 13px; color: #888; line-height: 1.6; }
+  #drop-area-cr:hover, #drop-area-cr.drag-over { border-color: #6366f1; }
+  #drop-area-cr.loaded { border-color: #22c55e; background: #f0fdf4; border-style: solid; }
+  #drop-area.loaded { border-color: #6366f1; background: #f5f3ff; border-style: solid; }
+  #drop-area .icon, #drop-area-cr .icon { font-size: 40px; margin-bottom: 12px; }
+  #drop-area h2, #drop-area-cr h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+  #drop-area p, #drop-area-cr p { margin: 0; font-size: 13px; color: #888; line-height: 1.6; }
   #api-key-bar { background: #fffbeb; border-bottom: 1px solid #fcd34d; padding: 10px 20px; display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; }
   #api-key-bar label { color: #92400e; font-weight: 500; white-space: nowrap; }
   #api-key-input { flex: 1; min-width: 260px; max-width: 420px; padding: 6px 10px; border-radius: 6px; border: 0.5px solid #fcd34d; background: #fff; font-family: monospace; font-size: 12px; color: #1a1a1a; }
@@ -116,14 +119,37 @@
   </div>
   <div id="body">
     <div id="upload-zone">
-      <div id="drop-area" onclick="document.getElementById('file-input').click()"
-           ondragover="event.preventDefault(); this.classList.add('drag-over')"
-           ondragleave="this.classList.remove('drag-over')"
-           ondrop="handleDrop(event)">
-        <div class="icon">📊</div>
-        <h2>Upload PIM Export</h2>
-        <p>Drop an .xlsx file here or click to browse<br>Expects: SKU, Name, Brand description, Taxonomy Node,<br>Model Description, Model Bullet Text</p>
-        <input id="file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:900px; width:100%; margin:0 auto;">
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#6366f1;margin-bottom:8px;">Required</div>
+          <div id="drop-area" onclick="document.getElementById('file-input').click()"
+               ondragover="event.preventDefault(); this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleDrop(event)"
+               style="padding:40px 30px; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <div class="icon" id="pim-icon">📊</div>
+            <h2 id="pim-label">PIM Export</h2>
+            <p>Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.7">SKU · Name · Brand description · Taxonomy Node<br>Model Description · Model Bullet Text</span></p>
+            <input id="file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:8px;">Optional — adds Rank &amp; Online filters</div>
+          <div id="drop-area-cr"
+               ondragover="event.preventDefault(); this.classList.add('drag-over')"
+               ondragleave="this.classList.remove('drag-over')"
+               ondrop="handleDropCR(event)"
+               onclick="document.getElementById('file-input-cr').click()"
+               style="padding:40px 30px; min-height:220px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-color:rgba(0,0,0,0.12);">
+            <div class="icon" id="cr-icon">📋</div>
+            <h2 id="cr-label">Content Report</h2>
+            <p id="cr-sub">Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.7">Material ID · Rank · Online?</span></p>
+            <input id="file-input-cr" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleContentReport(this.files[0])">
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:16px;">
+        <button id="btn-start" class="btn-purple" style="padding:10px 32px;font-size:13px;display:none" onclick="startAudit()">Start audit →</button>
       </div>
     </div>
     <div id="main-content" style="display:none">
@@ -226,29 +252,48 @@ function gradeRow(row) {
   return { letter, flags, words: words.length, sentences: sentences.length, bulletCount: bullets.length };
 }
 function handleDrop(e) { e.preventDefault(); document.getElementById('drop-area').classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }
+function handleDropCR(e) { e.preventDefault(); document.getElementById('drop-area-cr').classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleContentReport(e.dataTransfer.files[0]); }
+let pendingRows = null;
 function handleFile(file) {
   const reader = new FileReader();
   reader.onload = e => {
     const wb = XLSX.read(e.target.result, {type:'array'});
-    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
-    grades = rows.map(gradeRow);
-    rewrites = {}; edits = {}; decisions = {}; selected = new Set(); activeFilter = 'all';
-    document.getElementById('upload-zone').style.display = 'none';
-    document.getElementById('main-content').style.display = 'block';
-    document.getElementById('btn-new-file').style.display = 'inline-block';
-    document.getElementById('topbar-sub').textContent = rows.length + ' SKUs loaded';
-    renderAll();
+    pendingRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    document.getElementById('drop-area').classList.add('loaded');
+    document.getElementById('pim-icon').textContent = '✅';
+    document.getElementById('pim-label').textContent = file.name.length > 28 ? file.name.substring(0,25)+'…' : file.name;
+    document.getElementById('btn-start').style.display = 'inline-block';
   };
   reader.readAsArrayBuffer(file);
 }
+function startAudit() {
+  rows = pendingRows;
+  grades = rows.map(gradeRow);
+  rewrites = {}; edits = {}; decisions = {}; selected = new Set(); activeFilter = 'all';
+  document.getElementById('upload-zone').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+  document.getElementById('btn-new-file').style.display = 'inline-block';
+  document.getElementById('topbar-sub').textContent = rows.length + ' SKUs loaded' + (Object.keys(contentMap).length > 0 ? ' · Content report loaded' : '');
+  renderAll();
+}
 function reset() {
   rows = []; grades = []; rewrites = {}; edits = {}; decisions = {}; selected = new Set();
-  contentMap = {}; rankFilter = 'all'; onlineFilter = 'all';
+  contentMap = {}; rankFilter = 'all'; onlineFilter = 'all'; pendingRows = null;
   document.getElementById('upload-zone').style.display = 'flex';
   document.getElementById('main-content').style.display = 'none';
   document.getElementById('btn-new-file').style.display = 'none';
   document.getElementById('btn-review-top').style.display = 'none';
+  document.getElementById('btn-start').style.display = 'none';
   document.getElementById('topbar-sub').textContent = 'Grade, flag, and rewrite legacy product content';
+  document.getElementById('drop-area').classList.remove('loaded');
+  document.getElementById('drop-area-cr').classList.remove('loaded');
+  document.getElementById('pim-icon').textContent = '📊';
+  document.getElementById('pim-label').textContent = 'PIM Export';
+  document.getElementById('cr-icon').textContent = '📋';
+  document.getElementById('cr-label').textContent = 'Content Report';
+  document.getElementById('cr-sub').innerHTML = 'Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.7">Material ID · Rank · Online?</span>';
+  document.getElementById('file-input').value = '';
+  document.getElementById('file-input-cr').value = '';
 }
 function handleContentReport(file) {
   const reader = new FileReader();
@@ -260,7 +305,15 @@ function handleContentReport(file) {
       const sku = String(r['Material ID'] || '').trim();
       if (sku) contentMap[sku] = { rank: String(r['Rank']||'').trim(), online: String(r['Online?']||'').trim().toUpperCase() };
     });
-    renderAll();
+    // Update drop zone UI if still on upload screen
+    const crZone = document.getElementById('drop-area-cr');
+    if (crZone) {
+      crZone.classList.add('loaded');
+      document.getElementById('cr-icon').textContent = '✅';
+      document.getElementById('cr-label').textContent = file.name.length > 28 ? file.name.substring(0,25)+'…' : file.name;
+      document.getElementById('cr-sub').textContent = sheetRows.length + ' SKUs loaded · Rank + Online filters ready';
+    }
+    if (rows.length) renderAll();
   };
   reader.readAsArrayBuffer(file);
 }
