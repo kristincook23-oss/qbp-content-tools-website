@@ -114,6 +114,7 @@
     </div>
     <div id="topbar-actions">
       <button class="btn-dark" id="btn-review-top" style="display:none" onclick="showReview()">Review rewrites →</button>
+      <button class="btn-green" id="btn-export-table" style="display:none" onclick="exportXLSX()">Export grades ↓</button>
       <button class="btn-dark" id="btn-new-file" style="display:none" onclick="reset()">New file</button>
     </div>
   </div>
@@ -273,6 +274,7 @@ function startAudit() {
   document.getElementById('upload-zone').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
   document.getElementById('btn-new-file').style.display = 'inline-block';
+  document.getElementById('btn-export-table').style.display = 'inline-block';
   document.getElementById('topbar-sub').textContent = rows.length + ' SKUs loaded' + (Object.keys(contentMap).length > 0 ? ' · Content report loaded' : '');
   renderAll();
 }
@@ -283,6 +285,7 @@ function reset() {
   document.getElementById('main-content').style.display = 'none';
   document.getElementById('btn-new-file').style.display = 'none';
   document.getElementById('btn-review-top').style.display = 'none';
+  document.getElementById('btn-export-table').style.display = 'none';
   document.getElementById('btn-start').style.display = 'none';
   document.getElementById('topbar-sub').textContent = 'Grade, flag, and rewrite legacy product content';
   document.getElementById('drop-area').classList.remove('loaded');
