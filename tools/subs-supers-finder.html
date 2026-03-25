@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subs & Supers Gap Finder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  #topbar { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
+  #topbar p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+  #body { padding: 16px 20px; }
+  button { padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; transition: opacity 0.1s; }
+  button:hover { opacity: 0.8; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-dark { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+  .btn-green { background: #22c55e; color: #fff; border: none; }
+  .btn-active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+  .btn-muted { background: #f1efea; color: #5f5e5a; border-color: #d3d1c7; }
+  .card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 20px; }
+
+  /* Upload zone */
+  #upload-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 32px; max-width: 860px; margin: 0 auto; }
+  .drop-area { border: 2px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 36px 24px; text-align: center; cursor: pointer; background: #fff; transition: border-color 0.2s; }
+  .drop-area:hover, .drop-area.drag-over { border-color: #6366f1; }
+  .drop-area.loaded { border-color: #22c55e; border-style: solid; }
+  .drop-area .icon { font-size: 32px; margin-bottom: 10px; }
+  .drop-area h2 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+  .drop-area p { margin: 0; font-size: 12px; color: #888; line-height: 1.5; }
+  .drop-area .loaded-name { font-size: 12px; color: #15803d; font-weight: 500; margin-top: 8px; }
+  .run-wrap { max-width: 860px; margin: 16px auto 0; text-align: center; }
+  #btn-run { padding: 10px 32px; font-size: 14px; background: #1a1a2e; color: #fff; border: none; border-radius: 10px; cursor: pointer; opacity: 0.4; }
+  #btn-run.ready { opacity: 1; }
+
+  /* Summary cards */
+  #summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: #fff; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.12); padding: 14px; text-align: center; }
+  .summary-card .num { font-size: 28px; font-weight: 500; }
+  .summary-card .lbl { font-size: 11px; color: #888; margin-top: 3px; line-height: 1.4; }
+
+  /* Filter bar */
+  #filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  #filter-bar .filter-group { display: flex; gap: 4px; align-items: center; }
+  #filter-bar .filter-label { font-size: 12px; color: #666; font-weight: 500; margin-right: 2px; }
+  .toggle-btn { padding: 5px 12px; border-radius: 6px; font-size: 12px; }
+  .toggle-btn.on { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+  /* Table */
+  #table-wrap { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f5f5f3; border-bottom: 0.5px solid rgba(0,0,0,0.15); }
+  th { padding: 10px 12px; text-align: left; font-weight: 500; white-space: nowrap; cursor: pointer; user-select: none; }
+  th:hover { background: #ebebea; }
+  th .sort-arrow { margin-left: 4px; opacity: 0.4; font-size: 11px; }
+  th.sorted .sort-arrow { opacity: 1; }
+  tbody tr { border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f9f9f8; }
+  td { padding: 8px 12px; vertical-align: middle; }
+  .sku-cell { font-family: monospace; font-size: 11px; color: #555; }
+  .name-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-A { color: #15803d; font-weight: 600; }
+  .rank-B { color: #2563eb; font-weight: 600; }
+  .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .status-1 { background: #fef2f2; color: #b91c1c; border: 0.5px solid #fca5a5; }
+  .status-3 { background: #fffbeb; color: #b45309; border: 0.5px solid #fcd34d; }
+  .po-none { color: #888; font-size: 11px; font-style: italic; }
+  .po-far { color: #888; font-size: 12px; }
+  #no-results { padding: 48px; text-align: center; color: #888; display: none; }
+
+  /* Toolbar */
+  #toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  #result-count { font-size: 12px; color: #666; margin-left: auto; }
+
+  @media (max-width: 700px) {
+    #upload-zone { grid-template-columns: 1fr; }
+    #summary-cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <h1>Subs &amp; Supers Gap Finder</h1>
+    <p id="topbar-sub">Find online, OOS items with no active substitute or supersede relationship</p>
+  </div>
+  <div style="display:flex; gap:8px">
+    <button class="btn-dark" id="btn-export" style="display:none" onclick="exportResults()">Export results ↓</button>
+    <button class="btn-dark" id="btn-reset" style="display:none" onclick="resetAll()">New report</button>
+  </div>
+</div>
+
+<div id="body">
+
+  <!-- UPLOAD ZONE -->
+  <div id="upload-section">
+    <div id="upload-zone">
+      <!-- Content Report -->
+      <div class="drop-area" id="drop-content"
+           onclick="document.getElementById('file-content').click()"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event, 'content')">
+        <div class="icon">📊</div>
+        <h2>Content Report</h2>
+        <p>Drop your PIM content export here<br>(.xlsx)</p>
+        <div class="loaded-name" id="content-name" style="display:none"></div>
+        <input id="file-content" type="file" accept=".xlsx,.xls" style="display:none" onchange="loadFile(this.files[0], 'content')">
+      </div>
+      <!-- Relationships -->
+      <div class="drop-area" id="drop-rels"
+           onclick="document.getElementById('file-rels').click()"
+           ondragover="event.preventDefault(); this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleDrop(event, 'rels')">
+        <div class="icon">🔗</div>
+        <h2>SKU Relationships Export</h2>
+        <p>Drop your SKU relationships export here<br>(.xlsx)</p>
+        <div class="loaded-name" id="rels-name" style="display:none"></div>
+        <input id="file-rels" type="file" accept=".xlsx,.xls" style="display:none" onchange="loadFile(this.files[0], 'rels')">
+      </div>
+    </div>
+    <div class="run-wrap">
+      <button id="btn-run" disabled onclick="runReport()">Run Report</button>
+      <div style="font-size:12px; color:#888; margin-top:8px" id="upload-hint">Upload both files to run the report</div>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results-section" style="display:none">
+    <div id="summary-cards"></div>
+    <div id="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">Status:</span>
+        <button class="toggle-btn on" id="tog-s1" onclick="toggleFilter('s1')">1 only</button>
+        <button class="toggle-btn" id="tog-s13" onclick="toggleFilter('s13')">1 + 3</button>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Rank:</span>
+        <button class="toggle-btn" id="tog-ra" onclick="toggleFilter('ra')">A only</button>
+        <button class="toggle-btn on" id="tog-rab" onclick="toggleFilter('rab')">A + B</button>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">PO filter:</span>
+        <button class="toggle-btn on" id="tog-po" onclick="togglePO()">No PO within 6 months</button>
+      </div>
+    </div>
+    <div id="toolbar">
+      <span id="result-count"></span>
+    </div>
+    <div id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('sku')">SKU <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('name')">Name <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('brand')">Brand <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('category')">Category <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('rank')" style="width:60px; text-align:center">Rank <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('status')" style="width:70px; text-align:center">Status <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('inventory')" style="width:60px; text-align:center">US Inv <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('poDate')" style="width:110px">Next PO Date <span class="sort-arrow">↕</span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div id="no-results">No items match the current filters.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let contentRows = null;
+let relsRows = null;
+let allResults = [];
+let filteredResults = [];
+let sortCol = 'rank';
+let sortDir = 1;
+
+// Filter state
+let filterStatus = '1'; // '1' or '1+3'
+let filterRank = 'AB'; // 'A' or 'AB'
+let filterPO = true;   // true = enforce no-PO-within-6mo
+
+const TODAY = new Date();
+TODAY.setHours(0,0,0,0);
+const SIX_MONTHS = new Date(TODAY);
+SIX_MONTHS.setMonth(SIX_MONTHS.getMonth() + 6);
+
+function handleDrop(e, type) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0], type);
+}
+
+function loadFile(file, type) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    if (type === 'content') {
+      contentRows = rows;
+      const el = document.getElementById('content-name');
+      el.textContent = '✓ ' + file.name;
+      el.style.display = 'block';
+      document.getElementById('drop-content').classList.add('loaded');
+    } else {
+      relsRows = rows;
+      const el = document.getElementById('rels-name');
+      el.textContent = '✓ ' + file.name;
+      el.style.display = 'block';
+      document.getElementById('drop-rels').classList.add('loaded');
+    }
+    checkReady();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function checkReady() {
+  const ready = contentRows && relsRows;
+  const btn = document.getElementById('btn-run');
+  btn.disabled = !ready;
+  btn.classList.toggle('ready', ready);
+  document.getElementById('upload-hint').textContent = ready
+    ? 'Both files loaded — ready to run!'
+    : (!contentRows ? 'Still need: Content Report' : 'Still need: SKU Relationships Export');
+}
+
+function parseDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === 'number') {
+    // Excel serial date
+    const d = new Date((val - 25569) * 86400 * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(val).trim();
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function runReport() {
+  // Build set of SKUs with active relationships
+  const activeRelSKUs = new Set();
+  for (const row of relsRows) {
+    const sourceId = String(row['Source ID'] || '').trim().toUpperCase();
+    const active = String(row['Active'] || '').trim();
+    const relType = String(row['Relationship Type'] || '').trim().toUpperCase();
+    if (active === '1' && (relType === 'SUBSTITUTE' || relType === 'SUPERSEDE' || relType === 'SUPERSEDES')) {
+      activeRelSKUs.add(sourceId);
+    }
+  }
+
+  // Process content report
+  allResults = [];
+  for (const row of contentRows) {
+    const sku = String(row['Material ID'] || '').trim();
+    if (!sku) continue;
+
+    const online = String(row['Online?'] || '').trim().toUpperCase();
+    if (online !== 'YES') continue;
+
+    const usInv = row['US Inventory'];
+    const invNum = parseFloat(usInv);
+    if (isNaN(invNum) ? String(usInv).trim() !== '' && String(usInv).trim() !== '0' : invNum > 0) continue;
+
+    const rank = String(row['Rank'] || '').trim().toUpperCase();
+    if (rank !== 'A' && rank !== 'B') continue;
+
+    const status = String(row['Status'] || '').trim();
+    if (status !== '1' && status !== '3') continue;
+
+    if (activeRelSKUs.has(sku.toUpperCase())) continue;
+
+    const poDate = parseDate(row['Next PO Due Date']);
+
+    allResults.push({
+      sku,
+      name: String(row['Short Description'] || '').trim(),
+      brand: String(row['Brand'] || '').trim(),
+      category: String(row['Category'] || '').trim(),
+      rank,
+      status,
+      inventory: invNum || 0,
+      poDate,
+      poRaw: row['Next PO Due Date']
+    });
+  }
+
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('results-section').style.display = 'block';
+  document.getElementById('btn-export').style.display = 'inline-block';
+  document.getElementById('btn-reset').style.display = 'inline-block';
+
+  applyFilters();
+}
+
+function applyFilters() {
+  filteredResults = allResults.filter(r => {
+    // Status filter
+    if (filterStatus === '1' && r.status !== '1') return false;
+    // Rank filter
+    if (filterRank === 'A' && r.rank !== 'A') return false;
+    // PO filter
+    if (filterPO && r.poDate && r.poDate <= SIX_MONTHS) return false;
+    return true;
+  });
+
+  renderSummary();
+  renderTable();
+}
+
+function renderSummary() {
+  const all1 = allResults.filter(r => r.status === '1');
+  const all13 = allResults;
+  const ab1 = allResults.filter(r => r.status === '1');
+  const a1 = allResults.filter(r => r.status === '1' && r.rank === 'A');
+  const ab13 = allResults;
+  const a13 = allResults.filter(r => r.rank === 'A');
+
+  const cards = [
+    { num: filteredResults.length, lbl: 'Matching\ncurrent filters', color: '#6366f1' },
+    { num: allResults.filter(r => r.status === '1' && r.rank === 'A').length, lbl: 'A rank\nStatus 1', color: '#ef4444' },
+    { num: allResults.filter(r => r.status === '1').length, lbl: 'A + B rank\nStatus 1', color: '#f59e0b' },
+    { num: allResults.length, lbl: 'A + B rank\nStatus 1 + 3', color: '#22c55e' },
+  ];
+
+  document.getElementById('summary-cards').innerHTML = cards.map(c =>
+    `<div class="summary-card"><div class="num" style="color:${c.color}">${c.num}</div><div class="lbl">${c.lbl.replace('\n', '<br>')}</div></div>`
+  ).join('');
+}
+
+function renderTable() {
+  const sorted = [...filteredResults].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (sortCol === 'poDate') {
+      va = va ? va.getTime() : Infinity;
+      vb = vb ? vb.getTime() : Infinity;
+    } else if (sortCol === 'rank') {
+      va = va === 'A' ? 0 : 1;
+      vb = vb === 'A' ? 0 : 1;
+    } else {
+      va = String(va || '').toLowerCase();
+      vb = String(vb || '').toLowerCase();
+    }
+    if (va < vb) return -sortDir;
+    if (va > vb) return sortDir;
+    return 0;
+  });
+
+  const tbody = document.getElementById('table-body');
+  const noRes = document.getElementById('no-results');
+
+  if (!sorted.length) {
+    tbody.innerHTML = '';
+    noRes.style.display = 'block';
+    document.getElementById('result-count').textContent = '0 items';
+    return;
+  }
+  noRes.style.display = 'none';
+  document.getElementById('result-count').textContent = sorted.length.toLocaleString() + ' items';
+
+  tbody.innerHTML = sorted.map(r => {
+    const poStr = r.poDate
+      ? `<span class="po-far">${r.poDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>`
+      : `<span class="po-none">None</span>`;
+    return `<tr>
+      <td class="sku-cell">${r.sku}</td>
+      <td class="name-cell" title="${r.name.replace(/"/g,'&quot;')}">${r.name}</td>
+      <td>${r.brand}</td>
+      <td>${r.category}</td>
+      <td style="text-align:center"><span class="rank-${r.rank}">${r.rank}</span></td>
+      <td style="text-align:center"><span class="status-pill status-${r.status}">${r.status}</span></td>
+      <td style="text-align:center">0</td>
+      <td>${poStr}</td>
+    </tr>`;
+  }).join('');
+
+  // Update sort arrows
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+}
+
+function sortBy(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = 1; }
+  renderTable();
+}
+
+function toggleFilter(tog) {
+  if (tog === 's1') { filterStatus = '1'; document.getElementById('tog-s1').classList.add('on'); document.getElementById('tog-s13').classList.remove('on'); }
+  if (tog === 's13') { filterStatus = '1+3'; document.getElementById('tog-s13').classList.add('on'); document.getElementById('tog-s1').classList.remove('on'); }
+  if (tog === 'ra') { filterRank = 'A'; document.getElementById('tog-ra').classList.add('on'); document.getElementById('tog-rab').classList.remove('on'); }
+  if (tog === 'rab') { filterRank = 'AB'; document.getElementById('tog-rab').classList.add('on'); document.getElementById('tog-ra').classList.remove('on'); }
+  applyFilters();
+}
+
+function togglePO() {
+  filterPO = !filterPO;
+  document.getElementById('tog-po').classList.toggle('on', filterPO);
+  applyFilters();
+}
+
+function exportResults() {
+  const today = new Date().toISOString().slice(0, 10);
+  const out = filteredResults.map(r => ({
+    'SKU': r.sku,
+    'Name': r.name,
+    'Brand': r.brand,
+    'Category': r.category,
+    'Rank': r.rank,
+    'Status': r.status,
+    'US Inventory': r.inventory,
+    'Next PO Date': r.poDate ? r.poDate.toLocaleDateString('en-US') : '',
+    'Action Needed': 'Add substitute or supersede'
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Gap Report');
+  const summary = [
+    { 'Metric': 'Report Date', 'Value': today },
+    { 'Metric': 'Status Filter', 'Value': filterStatus === '1' ? 'Status 1 only' : 'Status 1 + 3' },
+    { 'Metric': 'Rank Filter', 'Value': filterRank === 'A' ? 'A only' : 'A + B' },
+    { 'Metric': 'PO Filter Active', 'Value': filterPO ? 'Yes (no PO within 6 months)' : 'No' },
+    { 'Metric': 'Items in report', 'Value': filteredResults.length },
+    { 'Metric': 'A rank / Status 1', 'Value': allResults.filter(r => r.status === '1' && r.rank === 'A').length },
+    { 'Metric': 'A+B rank / Status 1', 'Value': allResults.filter(r => r.status === '1').length },
+    { 'Metric': 'A+B rank / Status 1+3', 'Value': allResults.length },
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+  XLSX.writeFile(wb, 'subs_supers_gap_' + today + '.xlsx');
+}
+
+function resetAll() {
+  contentRows = null;
+  relsRows = null;
+  allResults = [];
+  filteredResults = [];
+  document.getElementById('upload-section').style.display = 'block';
+  document.getElementById('results-section').style.display = 'none';
+  document.getElementById('btn-export').style.display = 'none';
+  document.getElementById('btn-reset').style.display = 'none';
+  document.getElementById('drop-content').classList.remove('loaded');
+  document.getElementById('drop-rels').classList.remove('loaded');
+  document.getElementById('content-name').style.display = 'none';
+  document.getElementById('rels-name').style.display = 'none';
+  document.getElementById('file-content').value = '';
+  document.getElementById('file-rels').value = '';
+  filterStatus = '1'; filterRank = 'AB'; filterPO = true;
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-run').classList.remove('ready');
+  document.getElementById('upload-hint').textContent = 'Upload both files to run the report';
+}
+</script>
+</body>
+</html>
