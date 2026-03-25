@@ -495,7 +495,8 @@ function exportXLSX() {
   const today = new Date().toISOString().slice(0,10);
   const out = rows.map((row,i) => {
     const d=decisions[i]; const e=edits[i]; const g=grades[i];
-    return {...row,'Model Description':d==='accept'&&e?e.desc:row['Model Description'],'Model Bullet Text':d==='accept'&&e?e.bullets:row['Model Bullet Text'],'_Grade':g.letter,'_Flags':g.flags.map(f=>f.text).join('; '),'_Words':g.words,'_Bullets':g.bulletCount,'_Rewrite Status':d==='accept'?'Accepted':d==='reject'?'Kept original':rewrites[i]?'Pending review':'Not rewritten'};
+    const sku = String(row['SKU']||'').trim(); const cr = contentMap[sku]||{};
+    return {...row,'Model Description':d==='accept'&&e?e.desc:row['Model Description'],'Model Bullet Text':d==='accept'&&e?e.bullets:row['Model Bullet Text'],'_Grade':g.letter,'_Rank':cr.rank||'','_Online':cr.online||'','_Flags':g.flags.map(f=>f.text).join('; '),'_Words':g.words,'_Bullets':g.bulletCount,'_Rewrite Status':d==='accept'?'Accepted':d==='reject'?'Kept original':rewrites[i]?'Pending review':'Not rewritten'};
   });
   const log = rows.map((row,i) => {
     if(decisions[i]!=='accept') return null;
