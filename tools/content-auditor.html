@@ -133,7 +133,7 @@
       <div id="table-wrap">
         <table>
           <thead>
-            <tr>
+            <tr id="table-head-row">
               <th style="width:36px"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"></th>
               <th style="width:56px">Grade</th>
               <th style="width:80px">SKU</th>
@@ -196,6 +196,7 @@
 </div>
 <script>
 let rows = [], grades = [], rewrites = {}, edits = {}, decisions = {};
+let contentMap = {}, rankFilter = 'all', onlineFilter = 'all';
 let activeFilter = 'all';
 let selected = new Set();
 let reviewItems = [], reviewIdx = 0;
@@ -242,12 +243,30 @@ function handleFile(file) {
 }
 function reset() {
   rows = []; grades = []; rewrites = {}; edits = {}; decisions = {}; selected = new Set();
+  contentMap = {}; rankFilter = 'all'; onlineFilter = 'all';
   document.getElementById('upload-zone').style.display = 'flex';
   document.getElementById('main-content').style.display = 'none';
   document.getElementById('btn-new-file').style.display = 'none';
   document.getElementById('btn-review-top').style.display = 'none';
   document.getElementById('topbar-sub').textContent = 'Grade, flag, and rewrite legacy product content';
 }
+function handleContentReport(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, {type:'array'});
+    const sheetRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+    contentMap = {};
+    sheetRows.forEach(r => {
+      const sku = String(r['Material ID'] || '').trim();
+      if (sku) contentMap[sku] = { rank: String(r['Rank']||'').trim(), online: String(r['Online?']||'').trim().toUpperCase() };
+    });
+    renderAll();
+  };
+  reader.readAsArrayBuffer(file);
+}
+function setRankFilter(r) { rankFilter = r; renderAll(); }
+function setOnlineFilter(o) { onlineFilter = o; renderAll(); }
+function rankColor(r) { return r==='A'?'#22c55e':r==='B'?'#3b82f6':r==='C'?'#f59e0b':'#ef4444'; }
 function renderAll() { renderSummaryCards(); renderToolbar(); renderTable(); }
 function renderSummaryCards() {
   const counts = {A:0,B:0,C:0,F:0};
@@ -257,26 +276,57 @@ function renderSummaryCards() {
     `<div class="summary-card ${activeFilter===key?'active':''}" style="${activeFilter===key?'border-color:'+color+';':''}" onclick="setFilter('${key}')"><div class="num" style="color:${color}">${n}</div><div class="lbl">${lbl}</div></div>`).join('');
 }
 function setFilter(f) { activeFilter = f; renderAll(); }
-function getVisible() { return rows.map((r,i) => ({r,g:grades[i],i})).filter(({g}) => activeFilter==='all' || g.letter===activeFilter); }
+function getVisible() {
+  return rows.map((r,i) => ({r,g:grades[i],i})).filter(({r,g}) => {
+    if (activeFilter !== 'all' && g.letter !== activeFilter) return false;
+    const cr = contentMap[String(r.SKU||'').trim()];
+    if (rankFilter !== 'all' && (!cr || cr.rank !== rankFilter)) return false;
+    if (onlineFilter === 'yes' && (!cr || cr.online !== 'YES')) return false;
+    if (onlineFilter === 'no' && (!cr || cr.online === 'YES')) return false;
+    return true;
+  });
+}
 function renderToolbar() {
   const counts = {A:0,B:0,C:0,F:0}; grades.forEach(g => counts[g.letter]++);
   const failCount = (counts.C||0)+(counts.F||0);
+  const hasContent = Object.keys(contentMap).length > 0;
+  const crBtn = hasContent
+    ? `<span style="font-size:12px;color:#15803d;background:#f0fdf4;padding:4px 10px;border-radius:6px;border:0.5px solid #86efac">✓ Content report loaded</span>`
+    : `<label style="cursor:pointer"><span class="btn-muted" style="display:inline-block">+ Load Content Report <span style="opacity:0.6;font-weight:400">(optional)</span></span><input type="file" accept=".xlsx,.xls" style="display:none" onchange="handleContentReport(this.files[0])"></label>`;
+  const rankBtns = hasContent ? `<span style="font-size:11px;color:#888;align-self:center">Rank:</span>${['all','A','B','C','D'].map(r=>`<button class="${rankFilter===r?'btn-purple':'btn-muted'}" onclick="setRankFilter('${r}')" style="padding:4px 10px">${r==='all'?'All':r}</button>`).join('')}` : '';
+  const onlineBtns = hasContent ? `<span style="font-size:11px;color:#888;align-self:center;margin-left:4px">Online:</span>${[['all','All'],['yes','Yes'],['no','No']].map(([v,l])=>`<button class="${onlineFilter===v?'btn-purple':'btn-muted'}" onclick="setOnlineFilter('${v}')" style="padding:4px 10px">${l}</button>`).join('')}` : '';
   document.getElementById('toolbar').innerHTML = `
     <button class="btn-muted" onclick="selectFailing()">Select all C + F (${failCount})</button>
     <button class="btn-muted" onclick="selectVisible()">Select visible (${getVisible().length})</button>
     <button class="btn-muted" onclick="clearSelection()">Clear</button>
+    ${crBtn}${rankBtns}${onlineBtns}
     <span style="font-size:12px;color:#666">${selected.size > 0 ? selected.size+' selected' : ''}</span>
     ${selected.size > 0 ? `<button class="btn-purple" id="btn-rewrite" onclick="runRewrites()">✨ Rewrite selected (${selected.size})</button>` : ''}
     ${Object.keys(rewrites).length > 0 ? `<button class="btn-green" onclick="showReview()">Review rewrites →</button>` : ''}`;
 }
 function renderTable() {
+  const hasContent = Object.keys(contentMap).length > 0;
+  document.getElementById('table-head-row').innerHTML = `
+    <th style="width:36px"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"></th>
+    <th style="width:56px">Grade</th>
+    <th style="width:80px">SKU</th>
+    <th>Name</th>
+    ${hasContent ? '<th style="width:50px;text-align:center">Rank</th><th style="width:64px;text-align:center">Online</th>' : ''}
+    <th class="num-cell" style="width:56px">Words</th>
+    <th class="num-cell" style="width:60px">Bullets</th>
+    <th>Flags</th>
+    <th style="width:90px;text-align:center">Status</th>`;
   document.getElementById('table-body').innerHTML = getVisible().map(({r,g,i}) => {
     const dec = decisions[i];
+    const cr = contentMap[String(r.SKU||'').trim()];
+    const rankCell = hasContent ? `<td style="text-align:center;font-weight:600;color:${cr&&cr.rank?rankColor(cr.rank):'#ccc'}">${cr&&cr.rank||'—'}</td>` : '';
+    const onlineCell = hasContent ? `<td style="text-align:center">${cr?(cr.online==='YES'?'<span style="color:#15803d;font-size:11px;font-weight:500">Yes</span>':'<span style="color:#b91c1c;font-size:11px;font-weight:500">No</span>'):'<span style="color:#ccc">—</span>'}</td>` : '';
     return `<tr class="${selected.has(i)?'selected':''}" id="row-${i}">
       <td><input type="checkbox" ${selected.has(i)?'checked':''} onchange="toggleRow(${i},this.checked)"></td>
       <td><div class="grade-dot" style="background:${G[g.letter].color}">${g.letter}</div></td>
       <td class="sku-cell">${r.SKU||''}</td>
       <td class="name-cell" title="${(r.Name||'').replace(/"/g,'&quot;')}">${r.Name||''}</td>
+      ${rankCell}${onlineCell}
       <td class="num-cell ${g.words<25?'num-bad':''}">${g.words}</td>
       <td class="num-cell ${g.bulletCount<3?'num-bad':''}">${g.bulletCount}</td>
       <td>${g.flags.map(f=>`<span class="flag-pill flag-${f.sev}">${f.text}</span>`).join('')}</td>
