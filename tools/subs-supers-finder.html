@@ -326,11 +326,12 @@ function renderSummary() {
   const ab13 = allResults;
   const a13 = allResults.filter(r => r.rank === 'A');
 
+  const noPO = r => !r.poDate || r.poDate > SIX_MONTHS;
   const cards = [
     { num: filteredResults.length, lbl: 'Matching\ncurrent filters', color: '#6366f1' },
-    { num: allResults.filter(r => r.status === '1' && r.rank === 'A').length, lbl: 'A rank\nStatus 1', color: '#ef4444' },
-    { num: allResults.filter(r => r.status === '1').length, lbl: 'A + B rank\nStatus 1', color: '#f59e0b' },
-    { num: allResults.length, lbl: 'A + B rank\nStatus 1 + 3', color: '#22c55e' },
+    { num: allResults.filter(r => r.status === '1' && r.rank === 'A' && noPO(r)).length, lbl: 'A rank · Status 1\nNo upcoming PO', color: '#ef4444' },
+    { num: allResults.filter(r => r.status === '1' && noPO(r)).length, lbl: 'A + B rank · Status 1\nNo upcoming PO', color: '#f59e0b' },
+    { num: allResults.filter(r => noPO(r)).length, lbl: 'A + B rank · Status 1 + 3\nNo upcoming PO', color: '#22c55e' },
   ];
 
   document.getElementById('summary-cards').innerHTML = cards.map(c =>
