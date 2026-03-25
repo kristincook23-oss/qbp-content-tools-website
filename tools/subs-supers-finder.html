@@ -163,6 +163,7 @@
             <th onclick="sortBy('status')" style="width:70px; text-align:center">Status <span class="sort-arrow">↕</span></th>
             <th onclick="sortBy('inventory')" style="width:60px; text-align:center">US Inv <span class="sort-arrow">↕</span></th>
             <th onclick="sortBy('poDate')" style="width:110px">Next PO Date <span class="sort-arrow">↕</span></th>
+            <th onclick="sortBy('contentOwner')">Content Owner <span class="sort-arrow">↕</span></th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -289,7 +290,8 @@ function runReport() {
       status,
       inventory: invNum || 0,
       poDate,
-      poRaw: row['Next PO Due Date']
+      poRaw: row['Next PO Due Date'],
+      contentOwner: String(row['Content Owner'] || '').trim()
     });
   }
 
@@ -379,6 +381,7 @@ function renderTable() {
       <td style="text-align:center"><span class="status-pill status-${r.status}">${r.status}</span></td>
       <td style="text-align:center">0</td>
       <td>${poStr}</td>
+      <td>${r.contentOwner || '<span style="color:#bbb;font-size:11px">—</span>'}</td>
     </tr>`;
   }).join('');
 
@@ -417,6 +420,7 @@ function exportResults() {
     'Status': r.status,
     'US Inventory': r.inventory,
     'Next PO Date': r.poDate ? r.poDate.toLocaleDateString('en-US') : '',
+    'Content Owner': r.contentOwner,
     'Action Needed': 'Add substitute or supersede'
   }));
   const wb = XLSX.utils.book_new();
