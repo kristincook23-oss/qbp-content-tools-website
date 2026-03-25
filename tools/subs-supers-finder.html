@@ -39,6 +39,8 @@
   .summary-card { background: #fff; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.12); padding: 14px; text-align: center; }
   .summary-card .num { font-size: 28px; font-weight: 500; }
   .summary-card .lbl { font-size: 11px; color: #888; margin-top: 3px; line-height: 1.4; }
+  .priority-card { border: 1.5px solid #fca5a5; background: #fff8f8; }
+  .priority-badge { display: inline-block; background: #ef4444; color: #fff; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-bottom: 8px; letter-spacing: 0.3px; }
 
   /* Filter bar */
   #filter-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
@@ -329,13 +331,17 @@ function renderSummary() {
   const noPO = r => !r.poDate || r.poDate > SIX_MONTHS;
   const cards = [
     { num: filteredResults.length, lbl: 'Matching\ncurrent filters', color: '#6366f1' },
-    { num: allResults.filter(r => r.status === '1' && r.rank === 'A' && noPO(r)).length, lbl: 'A rank · Status 1\nNo upcoming PO', color: '#ef4444' },
+    { num: allResults.filter(r => r.status === '1' && r.rank === 'A' && noPO(r)).length, lbl: 'A rank · Status 1\nNo upcoming PO', color: '#ef4444', priority: true },
     { num: allResults.filter(r => r.status === '1' && noPO(r)).length, lbl: 'A + B rank · Status 1\nNo upcoming PO', color: '#f59e0b' },
     { num: allResults.filter(r => noPO(r)).length, lbl: 'A + B rank · Status 1 + 3\nNo upcoming PO', color: '#22c55e' },
   ];
 
   document.getElementById('summary-cards').innerHTML = cards.map(c =>
-    `<div class="summary-card"><div class="num" style="color:${c.color}">${c.num}</div><div class="lbl">${c.lbl.replace('\n', '<br>')}</div></div>`
+    `<div class="summary-card${c.priority ? ' priority-card' : ''}">
+      ${c.priority ? '<div class="priority-badge">⚠ Top Priority</div>' : ''}
+      <div class="num" style="color:${c.color}">${c.num}</div>
+      <div class="lbl">${c.lbl.replace('\n', '<br>')}</div>
+    </div>`
   ).join('');
 }
 
