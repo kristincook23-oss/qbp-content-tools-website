@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Report Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+
+  #topbar { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
+  #topbar p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+
+  #body { padding: 16px 20px; max-width: 1100px; margin: 0 auto; }
+
+  button { padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; transition: opacity 0.1s; }
+  button:hover { opacity: 0.8; }
+  .btn-dark { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+  .btn-purple { background: #6366f1; color: #fff; border: none; }
+
+  /* Upload */
+  #upload-zone { display: flex; flex-direction: column; align-items: center; padding-top: 60px; }
+  .drop-box { border: 2px dashed rgba(0,0,0,0.18); border-radius: 12px; padding: 60px 80px; text-align: center; cursor: pointer; background: #fff; max-width: 480px; width: 100%; transition: border-color 0.2s; }
+  .drop-box:hover, .drop-box.drag-over { border-color: #6366f1; }
+  .drop-box .icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-box h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+  .drop-box p { margin: 0; font-size: 13px; color: #888; line-height: 1.7; }
+
+  /* Controls */
+  #controls { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 14px 20px; margin-bottom: 16px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  #controls label { font-size: 12px; font-weight: 500; color: #555; }
+  #controls input[type=date] { padding: 6px 10px; border-radius: 6px; border: 0.5px solid rgba(0,0,0,0.2); font-size: 13px; font-family: inherit; }
+  #controls select { padding: 6px 10px; border-radius: 6px; border: 0.5px solid rgba(0,0,0,0.2); font-size: 13px; font-family: inherit; background: #fff; }
+  .control-group { display: flex; align-items: center; gap: 8px; }
+  .control-divider { width: 1px; height: 28px; background: rgba(0,0,0,0.1); }
+  #file-info { font-size: 12px; color: #888; margin-left: auto; }
+
+  /* Summary cards */
+  #summary-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+  .s-card { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); padding: 16px 18px; }
+  .s-card .num { font-size: 32px; font-weight: 600; line-height: 1; margin-bottom: 4px; }
+  .s-card .lbl { font-size: 12px; color: #888; line-height: 1.4; }
+  .s-card .sub { font-size: 11px; color: #bbb; margin-top: 4px; }
+  .s-card.highlight { border: 1.5px solid #c4b5fd; background: #faf5ff; }
+  .s-card.warn { border: 1.5px solid #fca5a5; background: #fff8f8; }
+  .s-card.good { border: 1.5px solid #86efac; background: #f0fdf4; }
+
+  /* Section layout */
+  .section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .section-grid.wide { grid-template-columns: 1fr; }
+
+  /* Tables */
+  .panel { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); overflow: hidden; }
+  .panel-header { padding: 12px 16px; border-bottom: 0.5px solid rgba(0,0,0,0.08); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 13px; font-weight: 600; }
+  .panel-sub { font-size: 11px; color: #888; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead tr { background: #f5f5f3; }
+  th { padding: 8px 12px; text-align: left; font-weight: 500; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+  tbody tr { border-top: 0.5px solid rgba(0,0,0,0.06); }
+  tbody tr:hover { background: #fafaf8; }
+  td { padding: 8px 12px; vertical-align: middle; }
+  .td-num { text-align: right; font-weight: 500; }
+  .td-muted { color: #888; font-size: 11px; }
+  .bar-wrap { width: 80px; height: 6px; background: #f0f0ee; border-radius: 3px; display: inline-block; vertical-align: middle; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+
+  /* Rank badges */
+  .rank { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 600; font-size: 11px; }
+  .rank-A { background: #22c55e; }
+  .rank-B { background: #3b82f6; }
+  .rank-C { background: #f59e0b; }
+  .rank-D { background: #9ca3af; }
+  .rank-F { background: #ef4444; }
+
+  /* Pill */
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .pill-green { background: #dcfce7; color: #15803d; }
+  .pill-red { background: #fee2e2; color: #b91c1c; }
+  .pill-gray { background: #f3f4f6; color: #6b7280; }
+
+  .empty-state { padding: 28px; text-align: center; color: #bbb; font-size: 13px; }
+
+  @media (max-width: 700px) {
+    #summary-cards { grid-template-columns: repeat(2, 1fr); }
+    .section-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div>
+    <h1>Content Report Dashboard</h1>
+    <p id="topbar-sub">Weekly metrics from your content report</p>
+  </div>
+  <div>
+    <button class="btn-dark" id="btn-new" style="display:none" onclick="reset()">New report</button>
+  </div>
+</div>
+
+<div id="body">
+
+  <!-- Upload -->
+  <div id="upload-zone">
+    <div class="drop-box"
+         ondragover="event.preventDefault(); this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)"
+         onclick="document.getElementById('file-input').click()">
+      <div class="icon">📊</div>
+      <h2>Upload Content Report</h2>
+      <p>Drop your .xlsx content report here or click to browse</p>
+      <input id="file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" style="display:none">
+
+    <div id="controls">
+      <div class="control-group">
+        <label for="week-end">Week ending</label>
+        <input type="date" id="week-end" onchange="renderAll()">
+      </div>
+      <div class="control-divider"></div>
+      <div class="control-group">
+        <label for="filter-owner">Owner</label>
+        <select id="filter-owner" onchange="renderAll()"><option value="">All</option></select>
+      </div>
+      <div class="control-group">
+        <label for="filter-rank">Rank</label>
+        <select id="filter-rank" onchange="renderAll()">
+          <option value="">All</option>
+          <option>A</option><option>B</option><option>C</option><option>D</option>
+        </select>
+      </div>
+      <div id="file-info"></div>
+    </div>
+
+    <div id="summary-cards"></div>
+
+    <div class="section-grid">
+      <div class="panel" id="panel-went-live">
+        <div class="panel-header">
+          <div class="panel-title">Went Live This Week</div>
+          <div class="panel-sub" id="went-live-sub"></div>
+        </div>
+        <div id="went-live-body"></div>
+      </div>
+      <div class="panel" id="panel-newmats">
+        <div class="panel-header">
+          <div class="panel-title">Newmats Added This Week</div>
+          <div class="panel-sub" id="newmats-sub"></div>
+        </div>
+        <div id="newmats-body"></div>
+      </div>
+    </div>
+
+    <div class="section-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Live SKUs by Content Owner</div>
+          <div class="panel-sub">online SKUs per person</div>
+        </div>
+        <div id="owner-body"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Online SKUs by Rank</div>
+          <div class="panel-sub">of all online SKUs</div>
+        </div>
+        <div id="rank-body"></div>
+      </div>
+    </div>
+
+    <div class="section-grid wide">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">⚠ Live SKUs Missing Good Content</div>
+          <div class="panel-sub" id="gap-sub">online but no good content flagged</div>
+        </div>
+        <div id="gap-body"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let allRows = [];
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.querySelector('.drop-box').classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+}
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+    allRows = raw;
+
+    // Set default date to today
+    const today = new Date();
+    document.getElementById('week-end').value = today.toISOString().slice(0, 10);
+
+    // Populate owner filter
+    const owners = [...new Set(raw.map(r => String(r['Content Owner'] || '').trim()).filter(Boolean))].sort();
+    const sel = document.getElementById('filter-owner');
+    sel.innerHTML = '<option value="">All</option>' + owners.map(o => `<option>${o}</option>`).join('');
+
+    document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs';
+    document.getElementById('upload-zone').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('btn-new').style.display = 'inline-block';
+    document.getElementById('topbar-sub').textContent = 'Weekly metrics · ' + file.name;
+    renderAll();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseDate(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === 'number') {
+    const d = new Date((val - 25569) * 86400 * 1000);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(val).trim();
+  if (!str) return null;
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function getFilters() {
+  const weekEndStr = document.getElementById('week-end').value;
+  const weekEnd = weekEndStr ? new Date(weekEndStr + 'T23:59:59') : new Date();
+  const weekStart = new Date(weekEnd);
+  weekStart.setDate(weekStart.getDate() - 6);
+  weekStart.setHours(0, 0, 0, 0);
+  const owner = document.getElementById('filter-owner').value;
+  const rank = document.getElementById('filter-rank').value;
+  return { weekStart, weekEnd, owner, rank };
+}
+
+function applyFilters(rows) {
+  const { owner, rank } = getFilters();
+  return rows.filter(r => {
+    if (owner && String(r['Content Owner'] || '').trim() !== owner) return false;
+    if (rank && String(r['Rank'] || '').trim() !== rank) return false;
+    return true;
+  });
+}
+
+function inWeek(dateVal, weekStart, weekEnd) {
+  const d = parseDate(dateVal);
+  if (!d) return false;
+  return d >= weekStart && d <= weekEnd;
+}
+
+function renderAll() {
+  const { weekStart, weekEnd } = getFilters();
+  const filtered = applyFilters(allRows);
+  renderSummaryCards(filtered, weekStart, weekEnd);
+  renderWentLive(filtered, weekStart, weekEnd);
+  renderNewmats(filtered, weekStart, weekEnd);
+  renderByOwner(filtered);
+  renderByRank(filtered);
+  renderGaps(filtered);
+}
+
+function renderSummaryCards(rows, weekStart, weekEnd) {
+  const online = rows.filter(r => String(r['Online?'] || '').toUpperCase() === 'YES');
+  const wentLive = rows.filter(r => inWeek(r['Online From:'], weekStart, weekEnd));
+  const newmats = rows.filter(r => inWeek(r['Creation Date'], weekStart, weekEnd));
+  const gaps = online.filter(r => String(r['Good Content?'] || '').toUpperCase() !== 'YES');
+
+  const pct = online.length ? Math.round((online.filter(r => String(r['Good Content?'] || '').toUpperCase() === 'YES').length / online.length) * 100) : 0;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="s-card highlight">
+      <div class="num" style="color:#6366f1">${wentLive.length.toLocaleString()}</div>
+      <div class="lbl">Went live this week</div>
+      <div class="sub">Online From within 7 days</div>
+    </div>
+    <div class="s-card">
+      <div class="num" style="color:#3b82f6">${newmats.length.toLocaleString()}</div>
+      <div class="lbl">Newmats added this week</div>
+      <div class="sub">Creation Date within 7 days</div>
+    </div>
+    <div class="s-card good">
+      <div class="num" style="color:#15803d">${online.length.toLocaleString()}</div>
+      <div class="lbl">Total online SKUs</div>
+      <div class="sub">${pct}% have good content</div>
+    </div>
+    <div class="s-card warn">
+      <div class="num" style="color:#ef4444">${gaps.length.toLocaleString()}</div>
+      <div class="lbl">Live, missing good content</div>
+      <div class="sub">Online but no good content flag</div>
+    </div>
+  `;
+}
+
+function renderWentLive(rows, weekStart, weekEnd) {
+  const items = rows.filter(r => inWeek(r['Online From:'], weekStart, weekEnd));
+  document.getElementById('went-live-sub').textContent = items.length + ' SKUs';
+
+  if (!items.length) {
+    document.getElementById('went-live-body').innerHTML = '<div class="empty-state">No SKUs went live in this period</div>';
+    return;
+  }
+
+  // Group by owner
+  const byOwner = {};
+  items.forEach(r => {
+    const o = String(r['Content Owner'] || 'Unassigned').trim();
+    byOwner[o] = (byOwner[o] || 0) + 1;
+  });
+  const sorted = Object.entries(byOwner).sort((a, b) => b[1] - a[1]);
+  const max = sorted[0][1];
+
+  document.getElementById('went-live-body').innerHTML = `
+    <table>
+      <thead><tr><th>Content Owner</th><th class="td-num">SKUs</th><th></th></tr></thead>
+      <tbody>
+        ${sorted.map(([owner, n]) => `
+          <tr>
+            <td>${owner}</td>
+            <td class="td-num">${n}</td>
+            <td><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:#6366f1"></div></div></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderNewmats(rows, weekStart, weekEnd) {
+  const items = rows.filter(r => inWeek(r['Creation Date'], weekStart, weekEnd));
+  document.getElementById('newmats-sub').textContent = items.length + ' SKUs';
+
+  if (!items.length) {
+    document.getElementById('newmats-body').innerHTML = '<div class="empty-state">No newmats found in this period</div>';
+    return;
+  }
+
+  // Group by brand
+  const byBrand = {};
+  items.forEach(r => {
+    const b = String(r['Brand'] || 'Unknown').trim();
+    byBrand[b] = (byBrand[b] || 0) + 1;
+  });
+  const sorted = Object.entries(byBrand).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const max = sorted[0][1];
+
+  document.getElementById('newmats-body').innerHTML = `
+    <table>
+      <thead><tr><th>Brand</th><th class="td-num">SKUs</th><th></th></tr></thead>
+      <tbody>
+        ${sorted.map(([brand, n]) => `
+          <tr>
+            <td>${brand}</td>
+            <td class="td-num">${n}</td>
+            <td><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(n/max*100)}%;background:#3b82f6"></div></div></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderByOwner(rows) {
+  const online = rows.filter(r => String(r['Online?'] || '').toUpperCase() === 'YES');
+  const byOwner = {};
+  online.forEach(r => {
+    const o = String(r['Content Owner'] || 'Unassigned').trim();
+    if (!byOwner[o]) byOwner[o] = { total: 0, good: 0 };
+    byOwner[o].total++;
+    if (String(r['Good Content?'] || '').toUpperCase() === 'YES') byOwner[o].good++;
+  });
+  const sorted = Object.entries(byOwner).sort((a, b) => b[1].total - a[1].total);
+  const max = sorted.length ? sorted[0][1].total : 1;
+
+  document.getElementById('owner-body').innerHTML = sorted.length ? `
+    <table>
+      <thead><tr><th>Owner</th><th class="td-num">Online</th><th class="td-num">Good Content</th><th></th></tr></thead>
+      <tbody>
+        ${sorted.map(([owner, d]) => {
+          const pct = Math.round(d.good / d.total * 100);
+          return `<tr>
+            <td>${owner}</td>
+            <td class="td-num">${d.total.toLocaleString()}</td>
+            <td class="td-num"><span class="pill ${pct >= 80 ? 'pill-green' : pct >= 50 ? 'pill-gray' : 'pill-red'}">${pct}%</span></td>
+            <td><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(d.total/max*100)}%;background:#1a1a2e"></div></div></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : '<div class="empty-state">No data</div>';
+}
+
+function renderByRank(rows) {
+  const online = rows.filter(r => String(r['Online?'] || '').toUpperCase() === 'YES');
+  const byRank = { A: 0, B: 0, C: 0, D: 0, Other: 0 };
+  online.forEach(r => {
+    const rank = String(r['Rank'] || '').trim().toUpperCase();
+    if (byRank[rank] !== undefined) byRank[rank]++;
+    else byRank.Other++;
+  });
+  const total = online.length || 1;
+  const rankColors = { A: '#22c55e', B: '#3b82f6', C: '#f59e0b', D: '#9ca3af', Other: '#e5e7eb' };
+
+  document.getElementById('rank-body').innerHTML = `
+    <table>
+      <thead><tr><th>Rank</th><th class="td-num">SKUs</th><th class="td-num">% of Online</th><th></th></tr></thead>
+      <tbody>
+        ${Object.entries(byRank).filter(([, n]) => n > 0).map(([rank, n]) => `
+          <tr>
+            <td><span class="rank rank-${rank}" style="background:${rankColors[rank]}">${rank === 'Other' ? '?' : rank}</span></td>
+            <td class="td-num">${n.toLocaleString()}</td>
+            <td class="td-num td-muted">${Math.round(n / total * 100)}%</td>
+            <td><div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(n/total*100)}%;background:${rankColors[rank]}"></div></div></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderGaps(rows) {
+  const gaps = rows.filter(r =>
+    String(r['Online?'] || '').toUpperCase() === 'YES' &&
+    String(r['Good Content?'] || '').toUpperCase() !== 'YES'
+  );
+  document.getElementById('gap-sub').textContent = gaps.length + ' SKUs online but no good content flag';
+
+  if (!gaps.length) {
+    document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all online SKUs have good content</div>';
+    return;
+  }
+
+  // Group by owner
+  const byOwner = {};
+  gaps.forEach(r => {
+    const o = String(r['Content Owner'] || 'Unassigned').trim();
+    const rank = String(r['Rank'] || '').trim();
+    if (!byOwner[o]) byOwner[o] = { total: 0, A: 0, B: 0 };
+    byOwner[o].total++;
+    if (rank === 'A') byOwner[o].A++;
+    if (rank === 'B') byOwner[o].B++;
+  });
+  const sorted = Object.entries(byOwner).sort((a, b) => b[1].total - a[1].total);
+
+  document.getElementById('gap-body').innerHTML = `
+    <table>
+      <thead><tr><th>Content Owner</th><th class="td-num">Missing Content</th><th class="td-num">A Rank</th><th class="td-num">B Rank</th></tr></thead>
+      <tbody>
+        ${sorted.map(([owner, d]) => `
+          <tr>
+            <td>${owner}</td>
+            <td class="td-num"><span class="pill pill-red">${d.total.toLocaleString()}</span></td>
+            <td class="td-num">${d.A > 0 ? `<span class="pill pill-red">${d.A}</span>` : '<span class="td-muted">—</span>'}</td>
+            <td class="td-num">${d.B > 0 ? `<span class="pill pill-gray">${d.B}</span>` : '<span class="td-muted">—</span>'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function reset() {
+  allRows = [];
+  document.getElementById('upload-zone').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('btn-new').style.display = 'none';
+  document.getElementById('topbar-sub').textContent = 'Weekly metrics from your content report';
+  document.getElementById('file-input').value = '';
+}
+</script>
+</body>
+</html>
