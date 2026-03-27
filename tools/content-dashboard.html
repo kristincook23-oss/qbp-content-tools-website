@@ -199,6 +199,14 @@
 <script>
 let allRows = [];
 
+function hasGoodContent(r) {
+  const hasDesc = String(r['Model Description'] || '').trim().length > 0;
+  const hasBullet = ['Model Bullet 1','Model Bullet 2','Model Bullet 3','Model Bullet 4',
+    'Model Bullet 5','Model Bullet 6','Model Bullet 7','Model Bullet 8','Model Bullet 9','Model Bullet 10']
+    .some(col => String(r[col] || '').trim().length > 0);
+  return hasDesc && hasBullet;
+}
+
 function handleDrop(e) {
   e.preventDefault();
   document.querySelector('.drop-box').classList.remove('drag-over');
@@ -287,10 +295,10 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
   const newmats = rows.filter(r => inWeek(r['Creation Date'], weekStart, weekEnd));
   const gaps = wentLive.filter(r =>
     String(r['Online?'] || '').toUpperCase() === 'YES' &&
-    String(r['Good Content?'] || '').toUpperCase() !== 'YES'
+    !hasGoodContent(r)
   );
 
-  const pct = online.length ? Math.round((online.filter(r => String(r['Good Content?'] || '').toUpperCase() === 'YES').length / online.length) * 100) : 0;
+  const pct = online.length ? Math.round((online.filter(r => hasGoodContent(r)).length / online.length) * 100) : 0;
 
   document.getElementById('summary-cards').innerHTML = `
     <div class="s-card highlight">
@@ -387,7 +395,7 @@ function renderByOwner(rows) {
     const o = String(r['Content Owner'] || 'Unassigned').trim();
     if (!byOwner[o]) byOwner[o] = { total: 0, good: 0 };
     byOwner[o].total++;
-    if (String(r['Good Content?'] || '').toUpperCase() === 'YES') byOwner[o].good++;
+    if (hasGoodContent(r)) byOwner[o].good++;
   });
   const sorted = Object.entries(byOwner).sort((a, b) => b[1].total - a[1].total);
   const max = sorted.length ? sorted[0][1].total : 1;
@@ -442,7 +450,7 @@ function renderGaps(rows) {
   const { weekStart, weekEnd } = getFilters();
   currentGaps = rows.filter(r =>
     String(r['Online?'] || '').toUpperCase() === 'YES' &&
-    String(r['Good Content?'] || '').toUpperCase() !== 'YES' &&
+    !hasGoodContent(r) &&
     inWeek(r['Online From:'], weekStart, weekEnd)
   );
   document.getElementById('gap-sub').textContent = currentGaps.length + ' SKUs that went live this week without good content';
