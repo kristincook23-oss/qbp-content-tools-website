@@ -82,6 +82,9 @@
   .pill-gray { background: #f3f4f6; color: #6b7280; }
 
   .empty-state { padding: 28px; text-align: center; color: #bbb; font-size: 13px; }
+  .assign-select { padding: 4px 6px; border-radius: 6px; border: 0.5px solid rgba(0,0,0,0.15); font-size: 11px; font-family: inherit; background: #fff; color: #1a1a1a; }
+  .gap-owner-section { border-top: 0.5px solid rgba(0,0,0,0.07); }
+  .gap-owner-header { padding: 8px 12px; background: #f9f9f8; font-size: 11px; font-weight: 600; color: #555; }
 
   @media (max-width: 700px) {
     #summary-cards { grid-template-columns: repeat(2, 1fr); }
@@ -180,8 +183,12 @@
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title">⚠ Live SKUs Missing Good Content</div>
-          <div class="panel-sub" id="gap-sub">online but no good content flagged</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="panel-sub" id="gap-sub">online but no good content flagged</div>
+            <button class="btn-purple" id="btn-export-gaps" style="display:none;padding:5px 12px;font-size:11px;" onclick="exportGaps()">Export list ↓</button>
+          </div>
         </div>
+        <div id="gap-summary"></div>
         <div id="gap-body"></div>
       </div>
     </div>
@@ -428,23 +435,31 @@ function renderByRank(rows) {
     </table>`;
 }
 
+let currentGaps = [];
+const ownerAssignments = {}; // sku -> assigned owner
+
 function renderGaps(rows) {
   const { weekStart, weekEnd } = getFilters();
-  const gaps = rows.filter(r =>
+  currentGaps = rows.filter(r =>
     String(r['Online?'] || '').toUpperCase() === 'YES' &&
     String(r['Good Content?'] || '').toUpperCase() !== 'YES' &&
     inWeek(r['Online From:'], weekStart, weekEnd)
   );
-  document.getElementById('gap-sub').textContent = gaps.length + ' SKUs that went live this week without good content';
+  document.getElementById('gap-sub').textContent = currentGaps.length + ' SKUs that went live this week without good content';
+  document.getElementById('btn-export-gaps').style.display = currentGaps.length ? 'inline-block' : 'none';
 
-  if (!gaps.length) {
-    document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all online SKUs have good content</div>';
+  if (!currentGaps.length) {
+    document.getElementById('gap-summary').innerHTML = '';
+    document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all SKUs that went live this week have good content</div>';
     return;
   }
 
-  // Group by owner
+  // Get all owners for the assign dropdown
+  const allOwners = [...new Set(allRows.map(r => String(r['Content Owner'] || '').trim()).filter(Boolean))].sort();
+
+  // Group summary by owner
   const byOwner = {};
-  gaps.forEach(r => {
+  currentGaps.forEach(r => {
     const o = String(r['Content Owner'] || 'Unassigned').trim();
     const rank = String(r['Rank'] || '').trim();
     if (!byOwner[o]) byOwner[o] = { total: 0, A: 0, B: 0 };
@@ -452,21 +467,86 @@ function renderGaps(rows) {
     if (rank === 'A') byOwner[o].A++;
     if (rank === 'B') byOwner[o].B++;
   });
-  const sorted = Object.entries(byOwner).sort((a, b) => b[1].total - a[1].total);
+  const sortedOwners = Object.entries(byOwner).sort((a, b) => b[1].total - a[1].total);
 
-  document.getElementById('gap-body').innerHTML = `
-    <table>
-      <thead><tr><th>Content Owner</th><th class="td-num">Missing Content</th><th class="td-num">A Rank</th><th class="td-num">B Rank</th></tr></thead>
+  document.getElementById('gap-summary').innerHTML = `
+    <table style="border-bottom:1px solid rgba(0,0,0,0.08)">
+      <thead><tr><th>Content Owner</th><th class="td-num">SKUs</th><th class="td-num">A Rank</th><th class="td-num">B Rank</th></tr></thead>
       <tbody>
-        ${sorted.map(([owner, d]) => `
+        ${sortedOwners.map(([owner, d]) => `
           <tr>
             <td>${owner}</td>
-            <td class="td-num"><span class="pill pill-red">${d.total.toLocaleString()}</span></td>
+            <td class="td-num"><span class="pill pill-red">${d.total}</span></td>
             <td class="td-num">${d.A > 0 ? `<span class="pill pill-red">${d.A}</span>` : '<span class="td-muted">—</span>'}</td>
             <td class="td-num">${d.B > 0 ? `<span class="pill pill-gray">${d.B}</span>` : '<span class="td-muted">—</span>'}</td>
           </tr>`).join('')}
       </tbody>
     </table>`;
+
+  // Individual SKU rows grouped by owner
+  const rankColors = { A: '#22c55e', B: '#3b82f6', C: '#f59e0b', D: '#9ca3af' };
+  let html = '<table><thead><tr><th>SKU</th><th>Description</th><th>Brand</th><th style="text-align:center">Rank</th><th>Current Owner</th><th>Assign To</th></tr></thead><tbody>';
+
+  currentGaps.forEach(r => {
+    const sku = String(r['Material ID'] || '').trim();
+    const desc = String(r['Short Description'] || '').trim();
+    const brand = String(r['Brand'] || '').trim();
+    const rank = String(r['Rank'] || '').trim();
+    const owner = String(r['Content Owner'] || 'Unassigned').trim();
+    const assigned = ownerAssignments[sku] || '';
+    const rankColor = rankColors[rank] || '#e5e7eb';
+
+    html += `<tr>
+      <td class="sku-cell" style="font-family:monospace;font-size:11px;color:#888;white-space:nowrap">${sku}</td>
+      <td style="font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${desc}">${desc}</td>
+      <td style="font-size:12px;color:#555">${brand}</td>
+      <td style="text-align:center"><span class="rank" style="background:${rankColor}">${rank || '?'}</span></td>
+      <td style="font-size:12px;color:#888">${owner}</td>
+      <td>
+        <select class="assign-select" onchange="assignOwner('${sku}', this.value)">
+          <option value="">— assign —</option>
+          ${allOwners.map(o => `<option value="${o}" ${assigned === o ? 'selected' : ''}>${o}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('gap-body').innerHTML = html;
+}
+
+function assignOwner(sku, owner) {
+  ownerAssignments[sku] = owner;
+}
+
+function exportGaps() {
+  if (!currentGaps.length) return;
+  const headers = ['SKU', 'Short Description', 'Brand', 'Category', 'Rank', 'Current Owner', 'Assigned To', 'Online From'];
+  const dataRows = currentGaps.map(r => {
+    const sku = String(r['Material ID'] || '').trim();
+    const onlineFrom = parseDate(r['Online From:']);
+    return [
+      sku,
+      String(r['Short Description'] || '').trim(),
+      String(r['Brand'] || '').trim(),
+      String(r['Category'] || '').trim(),
+      String(r['Rank'] || '').trim(),
+      String(r['Content Owner'] || '').trim(),
+      ownerAssignments[sku] || '',
+      onlineFrom ? onlineFrom.toLocaleDateString() : ''
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  ws['!cols'] = headers.map((_, ci) => ({
+    wch: Math.min(Math.max([headers, ...dataRows].reduce((m, row) => Math.max(m, String(row[ci] || '').length), 0), 10), 60)
+  }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Content Gaps');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+  const a = document.createElement('a');
+  a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + wbout;
+  a.download = 'content-gaps-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function reset() {
