@@ -254,11 +254,17 @@ function handleFile(file) {
     const sel = document.getElementById('filter-owner');
     sel.innerHTML = '<option value="">All</option>' + owners.map(o => `<option>${o}</option>`).join('');
 
-    // Debug: find a sample Creation Date value
-    const sampleCreation = raw.find(r => r['Creation Date']);
-    const sampleVal = sampleCreation ? JSON.stringify(sampleCreation['Creation Date']) : 'EMPTY';
-    const parsed = sampleCreation ? parseDate(sampleCreation['Creation Date']) : null;
-    document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs · Sample Creation Date: ' + sampleVal + ' → parsed: ' + (parsed ? parsed.toLocaleDateString() : 'null');
+    // Debug: show all columns with date-like values
+    const firstRow = raw[0] || {};
+    const dateCols = Object.keys(firstRow).filter(k => {
+      const lk = k.toLowerCase();
+      return lk.includes('date') || lk.includes(' on') || lk.includes('from') || lk.includes('creat') || lk.includes('added');
+    });
+    const dateColSamples = dateCols.map(col => {
+      const sample = raw.find(r => r[col]);
+      return col + ': ' + (sample ? JSON.stringify(sample[col]).slice(0, 30) : 'EMPTY');
+    }).join(' | ');
+    document.getElementById('file-info').textContent = 'Date cols → ' + (dateColSamples || 'none found');
     document.getElementById('upload-zone').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('btn-new').style.display = 'inline-block';
