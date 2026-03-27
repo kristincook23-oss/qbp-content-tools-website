@@ -142,6 +142,7 @@
       </div>
       <div id="file-info"></div>
     </div>
+    <div id="debug-info" style="display:none;background:#fffbe6;border:1px solid #f0c040;border-radius:6px;padding:8px 14px;font-size:11px;color:#555;margin:0 20px 0;"></div>
 
     <div id="summary-cards"></div>
 
@@ -252,7 +253,12 @@ function handleFile(file) {
     const sel = document.getElementById('filter-owner');
     sel.innerHTML = '<option value="">All</option>' + owners.map(o => `<option>${o}</option>`).join('');
 
+    const overviewKey = colMap['overview description'];
+    const bulletKey = colMap['model bullet 1'] || colMap['product bullet 1'];
+    const debugMsg = `Overview Description column found: ${overviewKey ? '"' + overviewKey + '"' : '❌ NOT FOUND'} | Bullet column found: ${bulletKey ? '"' + bulletKey + '"' : '❌ NOT FOUND'}`;
     document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs';
+    document.getElementById('debug-info').textContent = debugMsg;
+    document.getElementById('debug-info').style.display = 'block';
     document.getElementById('upload-zone').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('btn-new').style.display = 'inline-block';
