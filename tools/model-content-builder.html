@@ -249,14 +249,14 @@ textarea.edit-field:focus { border-color: var(--accent); }
   <div id="queueSection" style="display:none;">
     <div class="queue-bar">
       <div class="queue-bar-label"><span id="queueCount">0</span> models in export queue</div>
-      <button class="btn-download" onclick="exportQueue()">Export all as xlsx ↓</button>
+      <button class="btn-download" onclick="exportAllQueue()">Export all as xlsx ↓</button>
     </div>
   </div>
 
 </div>
 
 <script>
-let exportQueue = []; // { sku, desc, bullets }
+let queue = []; // { sku, desc, bullets }
 let currentFile = null;
 
 function checkKey() {
@@ -456,10 +456,10 @@ function getResultData(id, sku) {
 function addToQueue(id, sku) {
   const data = getResultData(id, sku);
   // Replace if same SKU already queued
-  const existing = exportQueue.findIndex(r => r.sku === sku);
-  if (existing >= 0) exportQueue[existing] = data;
-  else exportQueue.push(data);
-  document.getElementById('queueCount').textContent = exportQueue.length;
+  const existing = queue.findIndex(r => r.sku === sku);
+  if (existing >= 0) queue[existing] = data;
+  else queue.push(data);
+  document.getElementById('queueCount').textContent = queue.length;
   document.getElementById('queueSection').style.display = '';
   // Visual feedback
   const btn = event.target;
@@ -492,9 +492,9 @@ function exportSingle(id, sku) {
   XLSX.writeFile(wb, 'model_content_' + (sku || 'export') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
-function exportQueue() {
-  if (!exportQueue.length) return;
-  const out = buildXLSX(exportQueue);
+function exportAllQueue() {
+  if (!queue.length) return;
+  const out = buildXLSX(queue);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Model Content');
   XLSX.writeFile(wb, 'model_content_batch_' + new Date().toISOString().slice(0,10) + '.xlsx');
