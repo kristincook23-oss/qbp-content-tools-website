@@ -433,7 +433,7 @@ function renderResult(sku, raw) {
         </div>
       </div>
       <div class="export-footer">
-        <div class="export-footer-label">SKU: <span>${sku || '—'}</span></div>
+        <div class="export-footer-label">Model #: <span>${sku || '—'}</span> &nbsp;·&nbsp; Enterworks format &nbsp;·&nbsp; bullets tilde-delimited</div>
         <div style="display:flex;gap:10px;">
           <button class="btn-add" onclick="addToQueue('${id}','${sku.replace(/'/g,"\\'")}')">+ Add to export queue</button>
           <button class="btn-download" onclick="exportSingle('${id}','${sku.replace(/'/g,"\\'")}')">Export this one ↓</button>
@@ -469,35 +469,36 @@ function addToQueue(id, sku) {
   setTimeout(() => { btn.textContent = '+ Add to export queue'; btn.style.color = ''; btn.style.borderColor = ''; }, 1500);
 }
 
-function buildXLSX(items) {
-  const out = [];
+function writeXlsx(items, filename) {
+  const headers = ['Model Number', 'Model Description', 'Model Bullet Text', 'Model Bullet Order'];
+  const rows = [headers];
   items.forEach(r => {
-    r.bullets.forEach((b, i) => {
-      out.push({
-        'SKU': i === 0 ? r.sku : '',
-        'Model Overview': i === 0 ? r.desc : '',
-        'Model Bullet Points': b,
-        'Model Bullet Order': i + 1
-      });
-    });
+    const bulletText  = r.bullets.join('~');
+    const bulletOrder = r.bullets.map((_, i) => i + 1).join('~');
+    rows.push([r.sku, r.desc, bulletText, bulletOrder]);
   });
-  return out;
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = headers.map((_, ci) => {
+    const max = rows.reduce((m, row) => Math.max(m, String(row[ci] || '').length), 0);
+    return { wch: Math.min(Math.max(max, 14), 100) };
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Enterworks Import');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+  const a = document.createElement('a');
+  a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + wbout;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 function exportSingle(id, sku) {
   const data = getResultData(id, sku);
-  const out = buildXLSX([data]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Model Content');
-  XLSX.writeFile(wb, 'model_content_' + (sku || 'export') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  writeXlsx([data], 'model-content-' + (sku || 'export') + '-' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 
 function exportAllQueue() {
   if (!queue.length) return;
-  const out = buildXLSX(queue);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Model Content');
-  XLSX.writeFile(wb, 'model_content_batch_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  writeXlsx(queue, 'model-content-batch-' + new Date().toISOString().slice(0,10) + '.xlsx');
 }
 </script>
 </body>
