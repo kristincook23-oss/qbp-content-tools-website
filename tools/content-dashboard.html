@@ -125,8 +125,12 @@
 
     <div id="controls">
       <div class="control-group">
-        <label for="week-end">Week ending</label>
-        <input type="date" id="week-end" onchange="renderAll()">
+        <label for="date-start">From</label>
+        <input type="date" id="date-start" onchange="renderAll()">
+      </div>
+      <div class="control-group">
+        <label for="date-end">To</label>
+        <input type="date" id="date-end" onchange="renderAll()">
       </div>
       <div class="control-divider"></div>
       <div class="control-group">
@@ -148,14 +152,14 @@
     <div class="section-grid">
       <div class="panel" id="panel-went-live">
         <div class="panel-header">
-          <div class="panel-title">Went Live This Week</div>
+          <div class="panel-title">Went Live in Period</div>
           <div class="panel-sub" id="went-live-sub"></div>
         </div>
         <div id="went-live-body"></div>
       </div>
       <div class="panel" id="panel-newmats">
         <div class="panel-header">
-          <div class="panel-title">Newmats Added This Week</div>
+          <div class="panel-title">Newmats Added in Period</div>
           <div class="panel-sub" id="newmats-sub"></div>
         </div>
         <div id="newmats-body"></div>
@@ -238,9 +242,12 @@ function handleFile(file) {
     allRows = raw;
     if (raw.length) buildColMap(raw[0]);
 
-    // Set default date to today
+    // Set default date range to last 7 days
     const today = new Date();
-    document.getElementById('week-end').value = today.toISOString().slice(0, 10);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(today.getDate() - 6);
+    document.getElementById('date-end').value = today.toISOString().slice(0, 10);
+    document.getElementById('date-start').value = weekAgo.toISOString().slice(0, 10);
 
     // Populate owner filter
     const owners = [...new Set(raw.map(r => String(r['Content Owner'] || '').trim()).filter(Boolean))].sort();
@@ -271,11 +278,10 @@ function parseDate(val) {
 }
 
 function getFilters() {
-  const weekEndStr = document.getElementById('week-end').value;
-  const weekEnd = weekEndStr ? new Date(weekEndStr + 'T23:59:59') : new Date();
-  const weekStart = new Date(weekEnd);
-  weekStart.setDate(weekStart.getDate() - 6);
-  weekStart.setHours(0, 0, 0, 0);
+  const startStr = document.getElementById('date-start').value;
+  const endStr = document.getElementById('date-end').value;
+  const weekStart = startStr ? new Date(startStr + 'T00:00:00') : new Date(0);
+  const weekEnd = endStr ? new Date(endStr + 'T23:59:59') : new Date();
   const owner = document.getElementById('filter-owner').value;
   const rank = document.getElementById('filter-rank').value;
   return { weekStart, weekEnd, owner, rank };
@@ -321,13 +327,13 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
   document.getElementById('summary-cards').innerHTML = `
     <div class="s-card highlight">
       <div class="num" style="color:#6366f1">${wentLive.length.toLocaleString()}</div>
-      <div class="lbl">Went live this week</div>
-      <div class="sub">Online From within 7 days</div>
+      <div class="lbl">Went live in period</div>
+      <div class="sub">Online From within selected range</div>
     </div>
     <div class="s-card">
       <div class="num" style="color:#3b82f6">${newmats.length.toLocaleString()}</div>
-      <div class="lbl">Newmats added this week</div>
-      <div class="sub">Creation Date within 7 days</div>
+      <div class="lbl">Newmats added in period</div>
+      <div class="sub">Creation Date within selected range</div>
     </div>
     <div class="s-card good">
       <div class="num" style="color:#15803d">${online.length.toLocaleString()}</div>
@@ -336,8 +342,8 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
     </div>
     <div class="s-card warn">
       <div class="num" style="color:#ef4444">${gaps.length.toLocaleString()}</div>
-      <div class="lbl">Went live this week, missing content</div>
-      <div class="sub">New this week, no good content flag</div>
+      <div class="lbl">Went live in period, missing content</div>
+      <div class="sub">Went live in range, no good content</div>
     </div>
   `;
 }
@@ -471,12 +477,12 @@ function renderGaps(rows) {
     !hasGoodContent(r) &&
     inWeek(r['Online From:'], weekStart, weekEnd)
   );
-  document.getElementById('gap-sub').textContent = currentGaps.length + ' SKUs that went live this week without good content';
+  document.getElementById('gap-sub').textContent = currentGaps.length + ' SKUs that went live in this period without good content';
   document.getElementById('btn-export-gaps').style.display = currentGaps.length ? 'inline-block' : 'none';
 
   if (!currentGaps.length) {
     document.getElementById('gap-summary').innerHTML = '';
-    document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all SKUs that went live this week have good content</div>';
+    document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all SKUs that went live in this period have good content</div>';
     return;
   }
 
