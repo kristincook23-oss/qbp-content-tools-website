@@ -198,15 +198,34 @@
 
 <script>
 let allRows = [];
+let colMap = {}; // normalized (lowercase, trimmed) -> actual key from file
+
+function buildColMap(row) {
+  colMap = {};
+  for (const key of Object.keys(row)) {
+    colMap[key.trim().toLowerCase().replace(/\s+/g, ' ')] = key;
+  }
+  // Debug: log key columns so we can verify names match
+  console.log('[Dashboard] Overview Description key:', colMap['overview description']);
+  console.log('[Dashboard] Model Bullet 1 key:', colMap['model bullet 1']);
+  console.log('[Dashboard] Product Bullet 1 key:', colMap['product bullet 1']);
+  console.log('[Dashboard] All column keys:', Object.keys(row));
+}
+
+function getCol(r, name) {
+  const key = colMap[name.toLowerCase().replace(/\s+/g, ' ')];
+  return key ? String(r[key] || '').trim() : '';
+}
 
 function hasGoodContent(r) {
-  // Overview Description (Col 64) is the actual copy field — Model Description (Col 35) is just the model name
-  const hasDesc = String(r['Overview Description'] || '').trim().length > 0;
-  const hasBullet = [
-    'Model Bullet 1','Model Bullet 2','Model Bullet 3','Model Bullet 4','Model Bullet 5',
-    'Model Bullet 6','Model Bullet 7','Model Bullet 8','Model Bullet 9','Model Bullet 10',
-    'Product Bullet 1','Product Bullet 2','Product Bullet 3','Product Bullet 4','Product Bullet 5'
-  ].some(col => String(r[col] || '').trim().length > 0);
+  const hasDesc = getCol(r, 'overview description').length > 0;
+  let hasBullet = false;
+  for (let i = 1; i <= 10; i++) {
+    if (getCol(r, `model bullet ${i}`).length > 0 || getCol(r, `product bullet ${i}`).length > 0) {
+      hasBullet = true;
+      break;
+    }
+  }
   return hasDesc && hasBullet;
 }
 
@@ -222,6 +241,7 @@ function handleFile(file) {
     const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
     const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
     allRows = raw;
+    if (raw.length) buildColMap(raw[0]);
 
     // Set default date to today
     const today = new Date();
