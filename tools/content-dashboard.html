@@ -200,10 +200,13 @@
 let allRows = [];
 
 function hasGoodContent(r) {
-  const hasDesc = String(r['Model Description'] || '').trim().length > 0;
-  const hasBullet = ['Model Bullet 1','Model Bullet 2','Model Bullet 3','Model Bullet 4',
-    'Model Bullet 5','Model Bullet 6','Model Bullet 7','Model Bullet 8','Model Bullet 9','Model Bullet 10']
-    .some(col => String(r[col] || '').trim().length > 0);
+  // Overview Description (Col 64) is the actual copy field — Model Description (Col 35) is just the model name
+  const hasDesc = String(r['Overview Description'] || '').trim().length > 0;
+  const hasBullet = [
+    'Model Bullet 1','Model Bullet 2','Model Bullet 3','Model Bullet 4','Model Bullet 5',
+    'Model Bullet 6','Model Bullet 7','Model Bullet 8','Model Bullet 9','Model Bullet 10',
+    'Product Bullet 1','Product Bullet 2','Product Bullet 3','Product Bullet 4','Product Bullet 5'
+  ].some(col => String(r[col] || '').trim().length > 0);
   return hasDesc && hasBullet;
 }
 
