@@ -278,7 +278,10 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
   const online = rows.filter(r => String(r['Online?'] || '').toUpperCase() === 'YES');
   const wentLive = rows.filter(r => inWeek(r['Online From:'], weekStart, weekEnd));
   const newmats = rows.filter(r => inWeek(r['Creation Date'], weekStart, weekEnd));
-  const gaps = wentLive.filter(r => String(r['Good Content?'] || '').toUpperCase() !== 'YES');
+  const gaps = wentLive.filter(r =>
+    String(r['Online?'] || '').toUpperCase() === 'YES' &&
+    String(r['Good Content?'] || '').toUpperCase() !== 'YES'
+  );
 
   const pct = online.length ? Math.round((online.filter(r => String(r['Good Content?'] || '').toUpperCase() === 'YES').length / online.length) * 100) : 0;
 
