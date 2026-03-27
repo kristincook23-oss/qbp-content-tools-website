@@ -254,7 +254,10 @@ function handleFile(file) {
     const sel = document.getElementById('filter-owner');
     sel.innerHTML = '<option value="">All</option>' + owners.map(o => `<option>${o}</option>`).join('');
 
-    document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs';
+    // Debug: find the creation date column name
+    const firstRow = raw[0] || {};
+    const creationCol = Object.keys(firstRow).find(k => k.trim().toLowerCase().includes('creat')) || 'NOT FOUND';
+    document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs · Creation date col: "' + creationCol + '"';
     document.getElementById('upload-zone').style.display = 'none';
     document.getElementById('dashboard').style.display = 'block';
     document.getElementById('btn-new').style.display = 'inline-block';
