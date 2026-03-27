@@ -397,10 +397,12 @@ function selectVisible() { getVisible().forEach(({i})=>selected.add(i)); renderA
 function clearSelection() { selected.clear(); renderAll(); }
 const SYSTEM_PROMPT = `You are rewriting product descriptions for QBP (Quality Bicycle Products), the largest US bicycle distributor. Content is published on their dealersite, seen by wholesale dealers and consumers.
 VOICE: Professional, neutral, informative. No first-person language ("we," "our," "I," "my," "us"). No exaggerated claims. Industry-standard terminology, simplified when needed.
+AI DISCOVERABILITY: Prioritize AI and search discoverability in all rewrites. Lead the description with the full product name and brand. Add a problem-solution framing where appropriate ("designed for riders who..."). Expand semantic context with category-relevant terms (e.g. "road bike accessories," "commuter cycling gear"). If the product has a size or spec that is commonly searched (e.g. "31.8mm handlebars"), include it naturally in the description.
 MODEL DESCRIPTION RULES:
 - 2–5 complete sentences, 30–70 words
-- Explain what the product is, what it does, who it is for
-- Do not start with the brand name as subject
+- Begin with the full product name and brand
+- Explain what the product is, what it does, who it is for using a problem-solution framing
+- Include searchable specs and category terms naturally
 - No first-person language
 MODEL BULLETS RULES:
 - Minimum 3 bullets, ideally 4–6, maximum ~8
