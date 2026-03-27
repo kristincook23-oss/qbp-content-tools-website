@@ -278,7 +278,7 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
   const online = rows.filter(r => String(r['Online?'] || '').toUpperCase() === 'YES');
   const wentLive = rows.filter(r => inWeek(r['Online From:'], weekStart, weekEnd));
   const newmats = rows.filter(r => inWeek(r['Creation Date'], weekStart, weekEnd));
-  const gaps = online.filter(r => String(r['Good Content?'] || '').toUpperCase() !== 'YES');
+  const gaps = wentLive.filter(r => String(r['Good Content?'] || '').toUpperCase() !== 'YES');
 
   const pct = online.length ? Math.round((online.filter(r => String(r['Good Content?'] || '').toUpperCase() === 'YES').length / online.length) * 100) : 0;
 
@@ -300,8 +300,8 @@ function renderSummaryCards(rows, weekStart, weekEnd) {
     </div>
     <div class="s-card warn">
       <div class="num" style="color:#ef4444">${gaps.length.toLocaleString()}</div>
-      <div class="lbl">Live, missing good content</div>
-      <div class="sub">Online but no good content flag</div>
+      <div class="lbl">Went live this week, missing content</div>
+      <div class="sub">New this week, no good content flag</div>
     </div>
   `;
 }
@@ -426,11 +426,13 @@ function renderByRank(rows) {
 }
 
 function renderGaps(rows) {
+  const { weekStart, weekEnd } = getFilters();
   const gaps = rows.filter(r =>
     String(r['Online?'] || '').toUpperCase() === 'YES' &&
-    String(r['Good Content?'] || '').toUpperCase() !== 'YES'
+    String(r['Good Content?'] || '').toUpperCase() !== 'YES' &&
+    inWeek(r['Online From:'], weekStart, weekEnd)
   );
-  document.getElementById('gap-sub').textContent = gaps.length + ' SKUs online but no good content flag';
+  document.getElementById('gap-sub').textContent = gaps.length + ' SKUs that went live this week without good content';
 
   if (!gaps.length) {
     document.getElementById('gap-body').innerHTML = '<div class="empty-state" style="color:#15803d">✓ No gaps — all online SKUs have good content</div>';
