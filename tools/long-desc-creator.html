@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Long Description Creator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; }
+  #topbar { background: #1a1a2e; color: #fff; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; }
+  #topbar h1 { margin: 0; font-size: 16px; font-weight: 500; }
+  #topbar p { margin: 2px 0 0; font-size: 12px; opacity: 0.6; }
+  #body { padding: 16px 20px; }
+  button { padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 500; font-family: inherit; border: 0.5px solid rgba(0,0,0,0.2); background: #fff; color: #1a1a1a; transition: opacity 0.1s; }
+  button:hover { opacity: 0.8; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-dark { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.2); }
+  .btn-purple { background: #6366f1; color: #fff; border: none; }
+  .btn-green { background: #22c55e; color: #fff; border: none; }
+  .btn-muted { background: #f1efea; color: #5f5e5a; border-color: #d3d1c7; }
+  #api-key-bar { background: #fffbeb; border-bottom: 1px solid #fcd34d; padding: 10px 20px; display: flex; align-items: center; gap: 10px; font-size: 13px; flex-wrap: wrap; }
+  #api-key-bar label { color: #92400e; font-weight: 500; white-space: nowrap; }
+  #api-key-input { flex: 1; min-width: 260px; max-width: 420px; padding: 6px 10px; border-radius: 6px; border: 0.5px solid #fcd34d; background: #fff; font-family: monospace; font-size: 12px; }
+  #api-key-input:focus { outline: 2px solid #f59e0b; border-color: transparent; }
+  .key-saved { color: #15803d; font-size: 12px; display: none; }
+  .key-note { color: #92400e; font-size: 12px; opacity: 0.8; }
+  #upload-zone { display: flex; flex-direction: column; align-items: center; padding-top: 60px; }
+  #drop-area { border: 2px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 60px 80px; text-align: center; cursor: pointer; background: #fff; max-width: 480px; width: 100%; transition: border-color 0.2s; }
+  #drop-area:hover, #drop-area.drag-over { border-color: #6366f1; }
+  #drop-area .icon { font-size: 40px; margin-bottom: 12px; }
+  #drop-area h2 { margin: 0 0 8px; font-size: 16px; font-weight: 500; }
+  #drop-area p { margin: 0; font-size: 13px; color: #888; line-height: 1.6; }
+  #progress-wrap { height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; margin-bottom: 12px; overflow: hidden; display: none; }
+  #progress-bar { height: 100%; background: #6366f1; width: 0%; transition: width 0.3s; }
+  #toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  #table-wrap { background: #fff; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.12); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f5f5f3; border-bottom: 0.5px solid rgba(0,0,0,0.15); }
+  th { padding: 10px 12px; text-align: left; font-weight: 500; white-space: nowrap; }
+  tbody tr { border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+  tbody tr:last-child { border-bottom: none; }
+  td { padding: 8px 12px; vertical-align: middle; }
+  .sku-cell { font-family: monospace; font-size: 11px; color: #666; white-space: nowrap; }
+  .short-cell { color: #888; font-size: 12px; max-width: 220px; }
+  .long-cell { min-width: 320px; }
+  .edit-input { width: 100%; padding: 6px 8px; border-radius: 6px; border: 0.5px solid rgba(0,0,0,0.15); background: #f9f9f8; font-size: 12px; font-family: inherit; color: #1a1a1a; }
+  .edit-input:focus { outline: 2px solid #6366f1; border-color: transparent; background: #fff; }
+  .edit-input.generated { background: #f5f3ff; border-color: #c4b5fd; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+  .dot-pending { background: #d1d5db; }
+  .dot-done { background: #22c55e; }
+  .dot-error { background: #ef4444; }
+  #summary { font-size: 12px; color: #888; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="api-key-bar">
+  <label for="api-key-input">Claude API Key</label>
+  <input id="api-key-input" type="password" placeholder="sk-ant-..." autocomplete="off" oninput="saveKey(this.value)" />
+  <span class="key-saved" id="key-saved">&#10003; Key saved</span>
+  <span class="key-note">Required to generate descriptions. Key stays in your browser only.</span>
+</div>
+
+<div id="topbar">
+  <div>
+    <h1>Long Description Creator</h1>
+    <p id="topbar-sub">Generate catalog long descriptions from a product setup template</p>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn-green" id="btn-export" style="display:none" onclick="exportXLSX()">Export results ↓</button>
+    <button class="btn-dark" id="btn-new-file" style="display:none" onclick="reset()">New file</button>
+  </div>
+</div>
+
+<div id="body">
+  <div id="upload-zone">
+    <div id="drop-area"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="event.preventDefault(); this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="handleDrop(event)">
+      <div class="icon">📋</div>
+      <h2>Upload Product Setup Template</h2>
+      <p>Drop an .xlsx file here or click to browse<br><span style="font-size:11px;opacity:0.7">Reads: QBP Part Number · Brand · SAP Short Description</span></p>
+      <input id="file-input" type="file" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+  </div>
+
+  <div id="main-content" style="display:none">
+    <div id="toolbar"></div>
+    <div id="progress-wrap"><div id="progress-bar"></div></div>
+    <div id="summary"></div>
+    <div id="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:32px; text-align:center"></th>
+            <th style="width:72px">SKU</th>
+            <th style="width:220px">Short Description</th>
+            <th>Long Description <span style="font-weight:400; font-size:11px; color:#888">— click to edit</span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let rows = [], generated = {}, apiKey = '';
+
+function saveKey(val) {
+  apiKey = val;
+  document.getElementById('key-saved').style.display = val.startsWith('sk-') ? 'inline' : 'none';
+}
+
+function getApiKey() { return document.getElementById('api-key-input').value.trim(); }
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-area').classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+}
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    // detect header row — look for "QBP Prefix" or "SAP Short Description"
+    let dataRows = raw;
+    // find first row that has a part number pattern (letters + numbers)
+    rows = dataRows
+      .map(r => {
+        const sku = String(r['QBP Prefix/Part Number'] || r['Part Number'] || r['SKU'] || '').trim();
+        const brandRaw = String(r['Sales Material Group 1 (Brand)'] || r['Brand'] || '').trim();
+        const brand = brandRaw.replace(/^[A-Z0-9]+ - /, '').trim(); // strip "E31 - " prefix
+        const shortDesc = String(r['SAP Short Description'] || r['Short Description'] || '').trim();
+        return { sku, brand, shortDesc };
+      })
+      .filter(r => r.sku && r.shortDesc);
+
+    if (!rows.length) {
+      alert('Could not find product rows. Make sure the file is a Product Setup Template with columns: QBP Prefix/Part Number, Sales Material Group 1 (Brand), SAP Short Description.');
+      return;
+    }
+
+    generated = {};
+    document.getElementById('upload-zone').style.display = 'none';
+    document.getElementById('main-content').style.display = 'block';
+    document.getElementById('btn-new-file').style.display = 'inline-block';
+    document.getElementById('topbar-sub').textContent = rows.length + ' SKUs loaded from ' + file.name;
+    renderToolbar();
+    renderTable();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderToolbar() {
+  const done = Object.keys(generated).length;
+  document.getElementById('toolbar').innerHTML = `
+    <button class="btn-purple" onclick="generateAll()" id="btn-gen">✨ Generate all long descriptions (${rows.length})</button>
+    ${done > 0 ? `<button class="btn-muted" onclick="generateAll(true)">↻ Regenerate missing (${rows.length - done})</button>` : ''}
+    <span style="font-size:12px;color:#888">${done > 0 ? done + ' of ' + rows.length + ' generated' : ''}</span>
+  `;
+  document.getElementById('btn-export').style.display = done > 0 ? 'inline-block' : 'none';
+}
+
+function renderTable() {
+  document.getElementById('table-body').innerHTML = rows.map((r, i) => {
+    const g = generated[i];
+    const statusClass = !g ? 'dot-pending' : g.error ? 'dot-error' : 'dot-done';
+    const val = g && !g.error ? g.longDesc : (g && g.error ? '⚠ Error — click regenerate' : '');
+    return `<tr id="row-${i}">
+      <td style="text-align:center"><span class="status-dot ${statusClass}"></span></td>
+      <td class="sku-cell">${r.sku}</td>
+      <td class="short-cell" title="${r.shortDesc}">${r.shortDesc}</td>
+      <td class="long-cell">
+        <input class="edit-input ${g && !g.error ? 'generated' : ''}"
+               id="input-${i}"
+               value="${val.replace(/"/g, '&quot;')}"
+               placeholder="Will be generated…"
+               onchange="updateGenerated(${i}, this.value)" />
+      </td>
+    </tr>`;
+  }).join('');
+  const done = Object.keys(generated).filter(k => !generated[k].error).length;
+  document.getElementById('summary').textContent = done > 0 ? `${done} of ${rows.length} generated` : '';
+}
+
+function updateGenerated(i, val) {
+  if (!generated[i]) generated[i] = {};
+  generated[i].longDesc = val;
+  generated[i].error = false;
+  document.getElementById(`input-${i}`).classList.add('generated');
+}
+
+const SYSTEM_PROMPT = `You are generating catalog "Long Descriptions" for QBP (Quality Bicycle Products).
+
+FORMAT: Brand Model Product Type, Spec 1, Spec 2, Spec 3, Spec 4 - Color
+
+RULES:
+- Start with the brand name exactly as provided
+- Identify the model name (if distinct from product type), product type, up to 4 specs, and color
+- Specs are things like size (50ml, 120ml, 26"), quantity (Set of 3), material, compatibility, or key feature
+- Color goes at the very end after a space-dash-space: " - Black"
+- Only include a color if clearly stated in the short description
+- Max 4 specs — only include specs that add meaningful distinction
+- Expand abbreviations naturally: "w/" → "with", capitalize properly
+- Remove parentheses and reformat naturally: "(set of 3)" → "Set of 3"
+- If there are no specs to include, just output: Brand Model Product Type
+- Do NOT invent or add information not in the short description
+- Output ONLY the long description, no explanation, no punctuation at the end`;
+
+async function generateAll(missingOnly = false) {
+  if (!getApiKey()) { alert('Please enter your Claude API key in the yellow bar at the top.'); return; }
+  const todo = rows.map((r, i) => i).filter(i => missingOnly ? !generated[i] || generated[i].error : true);
+  if (!todo.length) return;
+
+  document.getElementById('btn-gen').disabled = true;
+  document.getElementById('progress-wrap').style.display = 'block';
+
+  for (let x = 0; x < todo.length; x++) {
+    const i = todo[x];
+    const r = rows[i];
+    setProgress(x / todo.length);
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'x-api-key': getApiKey(),
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          system: SYSTEM_PROMPT,
+          messages: [{
+            role: 'user',
+            content: `Brand: ${r.brand}\nShort Description: ${r.shortDesc}`
+          }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        document.getElementById('progress-wrap').style.display = 'none';
+        alert('API error on SKU "' + r.sku + '":\n\n' + ((err.error && err.error.message) || ('HTTP ' + res.status)));
+        document.getElementById('btn-gen').disabled = false;
+        renderTable(); renderToolbar(); return;
+      }
+
+      const data = await res.json();
+      const longDesc = (data.content || []).map(c => c.text || '').join('').trim();
+      generated[i] = { longDesc, error: false };
+
+    } catch (e) {
+      generated[i] = { longDesc: '', error: true };
+    }
+
+    setProgress((x + 1) / todo.length);
+    // update row live
+    const input = document.getElementById(`input-${i}`);
+    if (input && generated[i] && !generated[i].error) {
+      input.value = generated[i].longDesc;
+      input.classList.add('generated');
+      document.querySelector(`#row-${i} .status-dot`).className = 'status-dot dot-done';
+    }
+  }
+
+  document.getElementById('progress-wrap').style.display = 'none';
+  setProgress(0);
+  document.getElementById('btn-gen').disabled = false;
+  renderToolbar();
+  renderTable();
+}
+
+function setProgress(pct) { document.getElementById('progress-bar').style.width = (pct * 100) + '%'; }
+
+function exportXLSX() {
+  const out = rows.map((r, i) => {
+    const g = generated[i];
+    return {
+      'SKU': r.sku,
+      'Short Description': r.shortDesc,
+      'Long Description': g && !g.error ? g.longDesc : ''
+    };
+  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Long Descriptions');
+  const today = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, 'long_descriptions_' + today + '.xlsx');
+}
+
+function reset() {
+  rows = []; generated = {};
+  document.getElementById('upload-zone').style.display = 'flex';
+  document.getElementById('main-content').style.display = 'none';
+  document.getElementById('btn-new-file').style.display = 'none';
+  document.getElementById('btn-export').style.display = 'none';
+  document.getElementById('topbar-sub').textContent = 'Generate catalog long descriptions from a product setup template';
+  document.getElementById('file-input').value = '';
+}
+</script>
+</body>
+</html>
