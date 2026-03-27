@@ -227,7 +227,7 @@ function hasGoodContent(r) {
       break;
     }
   }
-  return hasDesc && hasBullet;
+  return hasDesc || hasBullet;
 }
 
 function handleDrop(e) {
