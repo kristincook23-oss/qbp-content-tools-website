@@ -255,7 +255,12 @@ function handleFile(file) {
 
     const overviewKey = colMap['overview description'];
     const bulletKey = colMap['model bullet 1'] || colMap['product bullet 1'];
-    const debugMsg = `Overview Description column found: ${overviewKey ? '"' + overviewKey + '"' : '❌ NOT FOUND'} | Bullet column found: ${bulletKey ? '"' + bulletKey + '"' : '❌ NOT FOUND'}`;
+    // Sample the first online SKU that fails hasGoodContent to show what its fields contain
+    const sampleFail = raw.find(r => String(r['Online?'] || '').toUpperCase() === 'YES' && !hasGoodContent(r));
+    const sampleDesc = sampleFail ? (String(sampleFail[overviewKey] || '').trim().slice(0, 80) || '(empty)') : 'n/a';
+    const sampleBullet = sampleFail ? (String(sampleFail[bulletKey] || '').trim().slice(0, 60) || '(empty)') : 'n/a';
+    const sampleSku = sampleFail ? String(sampleFail['Material ID'] || '') : 'n/a';
+    const debugMsg = `Columns OK ✓ | Sample flagged SKU: ${sampleSku} | Overview Desc: "${sampleDesc}" | Model Bullet 1: "${sampleBullet}"`;
     document.getElementById('file-info').textContent = file.name + ' · ' + raw.length.toLocaleString() + ' SKUs';
     document.getElementById('debug-info').textContent = debugMsg;
     document.getElementById('debug-info').style.display = 'block';
