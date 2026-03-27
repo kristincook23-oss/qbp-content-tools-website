@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QBP Model Content Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #ede9e1;
+  --surface: #ffffff;
+  --surface2: #f7f5f1;
+  --border: #ddd8cf;
+  --border-light: #ece8e0;
+  --accent: #c95f2a;
+  --accent-hover: #b0521f;
+  --warn: #8a6010;
+  --warn-bg: #fdf8e8;
+  --warn-border: #d4b84a;
+  --text: #1a1a1a;
+  --muted: #8a8178;
+  --mono: 'DM Mono', 'Courier New', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 15px 32px; display: flex; align-items: baseline; gap: 14px;
+}
+.logo { font-family: var(--mono); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 500; }
+.logo-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+
+.main { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; display: flex; flex-direction: column; gap: 20px; }
+
+.step-card { background: var(--surface); border: 1px solid var(--border); padding: 24px 28px; }
+.step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.step-num {
+  width: 26px; height: 26px; background: var(--accent); color: white; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 12px; font-weight: 500; flex-shrink: 0;
+}
+.step-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+.step-head-right { margin-left: auto; }
+
+.key-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.key-row input {
+  flex: 1; font-family: var(--mono); font-size: 13px; padding: 10px 14px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text); outline: none;
+}
+.key-row input:focus { border-color: var(--accent); }
+.btn-show {
+  font-family: var(--mono); font-size: 11px; padding: 10px 14px;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer;
+}
+.btn-show:hover { color: var(--text); }
+.key-confirmed { font-family: var(--mono); font-size: 11px; color: var(--accent); display: none; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.65; }
+.hint a { color: var(--accent); text-decoration: none; }
+.hint a:hover { text-decoration: underline; }
+
+.sku-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.sku-row label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.sku-row input {
+  width: 160px; font-family: var(--mono); font-size: 13px; padding: 8px 12px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text); outline: none;
+}
+.sku-row input:focus { border-color: var(--accent); }
+
+.mode-toggle { display: flex; border: 1px solid var(--border); }
+.mode-btn {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; padding: 7px 14px;
+  background: var(--surface2); border: none; cursor: pointer; color: var(--muted); transition: all 0.1s;
+}
+.mode-btn.active { background: var(--text); color: white; }
+.mode-btn:hover:not(.active) { color: var(--text); }
+
+textarea.src {
+  width: 100%; font-family: var(--mono); font-size: 12px; padding: 12px 14px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  resize: vertical; outline: none; line-height: 1.7; min-height: 90px;
+}
+textarea.src:focus { border-color: var(--accent); }
+textarea.src::placeholder { color: #c0bbb2; }
+
+.gen-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.btn-run {
+  font-family: var(--sans); font-size: 14px; font-weight: 600; padding: 11px 26px;
+  background: var(--accent); color: white; border: none; cursor: pointer; transition: background 0.15s;
+}
+.btn-run:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-run:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-clear-link {
+  font-family: var(--mono); font-size: 11px; color: var(--muted); background: none; border: none;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 3px; display: none;
+}
+.btn-clear-link:hover { color: var(--text); }
+.status-row { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.status-row.running { color: var(--accent); }
+.status-row.done { color: #2a7a4a; }
+.status-row.error { color: #b03030; }
+.spinner { width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress-wrap { width: 100%; height: 4px; background: var(--border); margin-top: 14px; display: none; }
+.progress-wrap.visible { display: block; }
+.progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
+
+/* Result card */
+.result-card { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+.result-header {
+  background: var(--surface2); border-bottom: 1px solid var(--border);
+  padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.result-title { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.result-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.result-body { padding: 22px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+.field-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+
+textarea.edit-field {
+  width: 100%; font-family: var(--sans); font-size: 13px; line-height: 1.7; padding: 10px 12px;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+  resize: vertical; outline: none;
+}
+textarea.edit-field:focus { border-color: var(--accent); }
+
+.bullet-list { list-style: disc; padding-left: 18px; }
+.bullet-list li { font-size: 13px; line-height: 1.7; color: #3a3530; padding: 1px 0; }
+
+.bullet-edit-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+.export-footer {
+  background: var(--surface2); border-top: 1px solid var(--border);
+  padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.export-footer-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.export-footer-label span { color: var(--text); font-weight: 500; }
+.btn-download {
+  font-family: var(--sans); font-size: 13px; font-weight: 600; padding: 10px 22px;
+  background: var(--accent); color: white; border: none; cursor: pointer; transition: background 0.15s;
+}
+.btn-download:hover { background: var(--accent-hover); }
+.btn-add {
+  font-family: var(--sans); font-size: 13px; font-weight: 500; padding: 10px 18px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s;
+}
+.btn-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.queue-bar {
+  background: var(--surface2); border: 1px solid var(--border); padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.queue-bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.queue-bar-label span { color: var(--text); font-weight: 500; }
+
+#fileDropZone {
+  position: relative; border: 2px dashed var(--border); background: var(--surface2);
+  padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.15s;
+}
+#fileDropZone:hover, #fileDropZone.drag-over { border-color: var(--accent); background: #fdf5f0; }
+#fileDropZone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.drop-icon { font-size: 26px; margin-bottom: 6px; }
+.drop-label { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.drop-label strong { color: var(--text); }
+.drop-formats { display: block; font-size: 10px; color: #bbb5ac; margin-top: 3px; letter-spacing: 0.12em; text-transform: uppercase; }
+.drop-success { font-family: var(--mono); font-size: 11px; color: #2a7a4a; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">QBP Model Content Builder</div>
+  <div class="logo-sub">Model-level description + bullets — Enterworks import</div>
+</header>
+
+<div class="main">
+
+  <!-- Step 1: API Key -->
+  <div class="step-card">
+    <div class="step-head">
+      <div class="step-num">1</div>
+      <div class="step-label">API Key</div>
+    </div>
+    <div class="key-row">
+      <input type="password" id="apiKey" placeholder="sk-ant-api03-…" autocomplete="off" oninput="checkKey()">
+      <button class="btn-show" onclick="toggleKey(this)">Show</button>
+      <span class="key-confirmed" id="keyConfirmed">✓ Key set</span>
+    </div>
+    <div class="hint">Used only to call Claude — never saved or transmitted anywhere else. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</div>
+  </div>
+
+  <!-- Step 2: Input -->
+  <div class="step-card">
+    <div class="step-head">
+      <div class="step-num">2</div>
+      <div class="step-label">Product Input</div>
+      <div class="step-head-right">
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="modeUrl" onclick="setMode('url')">URL</button>
+          <button class="mode-btn" id="modeCopy" onclick="setMode('copy')">Paste copy</button>
+          <button class="mode-btn" id="modeFile" onclick="setMode('file')">File</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sku-row">
+      <label for="modelSku">Model SKU</label>
+      <input type="text" id="modelSku" placeholder="e.g. SH1042" autocomplete="off">
+      <span style="font-size:12px; color:var(--muted);">Used in the export — all size/color variants inherit this content</span>
+    </div>
+
+    <textarea class="src" id="sourceInput" rows="3" placeholder="https://vendor.com/product-page"></textarea>
+
+    <div id="fileDropZone" style="display:none;"
+      ondragover="fileDragOver(event)" ondragleave="fileDragLeave(event)" ondrop="fileDrop(event)">
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" onchange="fileSelected(event)">
+      <div class="drop-icon">📄</div>
+      <div class="drop-label"><strong>Drop sell sheet here</strong> or click to browse<span class="drop-formats">.pdf &nbsp;·&nbsp; .jpg &nbsp;·&nbsp; .png</span></div>
+      <div class="drop-success" id="fileSuccess"></div>
+    </div>
+
+    <div class="hint" style="margin-top:8px;">Vendor URL, pasted copy, or a sell sheet PDF/image. For multiple models, run each separately and add to export queue.</div>
+  </div>
+
+  <!-- Step 3: Generate -->
+  <div class="step-card">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div class="step-label">Generate</div>
+    </div>
+    <div class="gen-row">
+      <button class="btn-run" id="runBtn" onclick="runBuilder()">Generate Model Content</button>
+      <button class="btn-clear-link" id="clearBtn" onclick="clearCurrent()">Clear</button>
+      <div class="status-row" id="statusBar"><span id="statusText"></span></div>
+    </div>
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsContainer"></div>
+
+  <!-- Export queue -->
+  <div id="queueSection" style="display:none;">
+    <div class="queue-bar">
+      <div class="queue-bar-label"><span id="queueCount">0</span> models in export queue</div>
+      <button class="btn-download" onclick="exportQueue()">Export all as xlsx ↓</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let exportQueue = []; // { sku, desc, bullets }
+let currentFile = null;
+
+function checkKey() {
+  const v = document.getElementById('apiKey').value.trim();
+  document.getElementById('keyConfirmed').style.display = v ? 'inline' : 'none';
+}
+function toggleKey(btn) {
+  const el = document.getElementById('apiKey');
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? 'Show' : 'Hide';
+}
+function setMode(mode) {
+  ['url','copy','file'].forEach(m => document.getElementById('mode'+m.charAt(0).toUpperCase()+m.slice(1)).classList.toggle('active', m === mode));
+  document.getElementById('sourceInput').style.display = mode === 'file' ? 'none' : 'block';
+  document.getElementById('fileDropZone').style.display = mode === 'file' ? 'block' : 'none';
+  if (mode === 'url') document.getElementById('sourceInput').placeholder = 'https://vendor.com/product-page';
+  if (mode === 'copy') document.getElementById('sourceInput').placeholder = 'Paste vendor product copy or spec sheet text here…';
+  currentFile = null; document.getElementById('fileSuccess').textContent = '';
+}
+function fileDragOver(e) { e.preventDefault(); document.getElementById('fileDropZone').classList.add('drag-over'); }
+function fileDragLeave() { document.getElementById('fileDropZone').classList.remove('drag-over'); }
+function fileDrop(e) { e.preventDefault(); document.getElementById('fileDropZone').classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); }
+function fileSelected(e) { if (e.target.files[0]) loadFile(e.target.files[0]); }
+function loadFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const mediaType = ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentFile = { base64: e.target.result.split(',')[1], mediaType, name: file.name };
+    document.getElementById('fileSuccess').textContent = '✓ Loaded: ' + file.name;
+  };
+  reader.readAsDataURL(file);
+}
+function setStatus(msg, state) {
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-row' + (state ? ' ' + state : '');
+  bar.innerHTML = (state === 'running' ? '<div class="spinner"></div>' : '') + '<span>' + msg + '</span>';
+}
+function clearCurrent() {
+  document.getElementById('resultsContainer').innerHTML = '';
+  document.getElementById('clearBtn').style.display = 'none';
+  setStatus('');
+}
+
+const SYSTEM_PROMPT = `You are writing model-level product content for QBP (Quality Bicycle Products), the largest US bicycle distributor. This content appears at the model level in Enterworks PIM and is inherited by all size and color variants.
+
+AI DISCOVERABILITY: Begin the description with the full product name and brand. Use a problem-solution framing where appropriate. Include category-relevant semantic terms and commonly searched specs naturally.
+
+VOICE: Professional, neutral, informative. No first-person ("we," "our," "I"). No exaggerated claims. No brand voice.
+
+OUTPUT FORMAT — plain text only, no markdown, no asterisks:
+
+--- MODEL START ---
+MODEL DESCRIPTION:
+[2–5 complete sentences, 30–70 words. Begin with the full product name and brand. Explain what it is, who it is for, and what problem it solves. Include any key specs common to all variants.]
+
+MODEL BULLETS:
+1. [Bullet — sentence fragment, one distinct fact, feature, material, or compatibility note]
+2. [Bullet]
+3. [Bullet]
+4. [Continue — minimum 3, ideally 4–6, maximum 8]
+--- MODEL END ---
+
+RULES:
+- Do not write SKU-level bullets (size, color variants are not covered here)
+- Do not invent specs not supported by the source
+- No first-person language
+- No filler phrases: "perfect for," "designed to," "built for," "ideal for," "innovative"
+- Consumer-safe: no guaranteed safety claims, no competitor comparisons, no medical language
+- Output nothing after the closing marker`;
+
+async function runBuilder() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('Please enter your Claude API key in Step 1.'); return; }
+
+  const sku = document.getElementById('modelSku').value.trim();
+  const source = document.getElementById('sourceInput').value.trim();
+
+  if (!source && !currentFile) { alert('Please enter a URL, paste product copy, or upload a file.'); return; }
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('progressWrap').classList.add('visible');
+  document.getElementById('progressBar').style.width = '0%';
+  setStatus('Generating model content…', 'running');
+
+  // Build message content
+  let userContent;
+  if (currentFile) {
+    userContent = [
+      { type: 'text', text: 'Generate model-level content for this product. Return ONLY the formatted output as specified.' },
+      { type: 'document', source: { type: 'base64', media_type: currentFile.mediaType, data: currentFile.base64 } }
+    ];
+  } else {
+    const label = source.startsWith('http') ? 'Product URL: ' : 'Product copy:\n';
+    userContent = label + source + '\n\nGenerate model-level content. Return ONLY the formatted output as specified.';
+  }
+
+  // Animate progress
+  let pct = 0;
+  const ticker = setInterval(() => { pct = Math.min(pct + 2, 85); document.getElementById('progressBar').style.width = pct + '%'; }, 300);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'x-api-key': key,
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 800,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userContent }]
+      })
+    });
+
+    clearInterval(ticker);
+    document.getElementById('progressBar').style.width = '100%';
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err.error && err.error.message) || 'HTTP ' + res.status);
+    }
+
+    const data = await res.json();
+    const raw = (data.content || []).map(c => c.text || '').join('').trim();
+    renderResult(sku, raw);
+    setStatus('Done', 'done');
+  } catch (e) {
+    clearInterval(ticker);
+    setStatus('Error: ' + e.message, 'error');
+  }
+
+  document.getElementById('progressWrap').classList.remove('visible');
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('clearBtn').style.display = 'inline';
+}
+
+function parseOutput(raw) {
+  const descMatch = raw.match(/MODEL DESCRIPTION:\s*([\s\S]*?)(?=MODEL BULLETS:|--- MODEL END ---)/i);
+  const bulletsMatch = raw.match(/MODEL BULLETS:\s*([\s\S]*?)(?=--- MODEL END ---)/i);
+  const desc = descMatch ? descMatch[1].trim() : raw.trim();
+  const bulletsRaw = bulletsMatch ? bulletsMatch[1].trim() : '';
+  const bullets = bulletsRaw
+    .split(/\n/)
+    .map(l => l.replace(/^\d+\.\s*/, '').trim())
+    .filter(Boolean);
+  return { desc, bullets };
+}
+
+function renderResult(sku, raw) {
+  const { desc, bullets } = parseOutput(raw);
+  const id = 'result-' + Date.now();
+
+  const html = `
+    <div class="result-card" id="${id}">
+      <div class="result-header">
+        <div class="result-title">${sku || '(no SKU entered)'} — Model Content</div>
+        <div class="result-meta">${bullets.length} bullet${bullets.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div class="result-body">
+        <div>
+          <div class="field-label">Model Description</div>
+          <textarea class="edit-field" id="${id}-desc" rows="4">${desc}</textarea>
+        </div>
+        <div>
+          <div class="field-label">Model Bullets <span style="font-weight:400;text-transform:none;font-size:10px;letter-spacing:0">— one per line, edit freely</span></div>
+          <textarea class="edit-field" id="${id}-bullets" rows="${Math.max(bullets.length + 1, 4)}">${bullets.join('\n')}</textarea>
+          <div class="bullet-edit-hint">Each line = one bullet. Blank lines are ignored on export.</div>
+        </div>
+      </div>
+      <div class="export-footer">
+        <div class="export-footer-label">SKU: <span>${sku || '—'}</span></div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn-add" onclick="addToQueue('${id}','${sku.replace(/'/g,"\\'")}')">+ Add to export queue</button>
+          <button class="btn-download" onclick="exportSingle('${id}','${sku.replace(/'/g,"\\'")}')">Export this one ↓</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('resultsContainer').insertAdjacentHTML('afterbegin', html);
+}
+
+function getResultData(id, sku) {
+  const desc = document.getElementById(id + '-desc').value.trim();
+  const bulletsRaw = document.getElementById(id + '-bullets').value;
+  const bullets = bulletsRaw.split('\n').map(l => l.trim()).filter(Boolean);
+  const bulletText = bullets.join('~');
+  const bulletOrder = bullets.map((_, i) => i + 1).join('~');
+  return { sku, desc, bulletText, bulletOrder, bullets };
+}
+
+function addToQueue(id, sku) {
+  const data = getResultData(id, sku);
+  // Replace if same SKU already queued
+  const existing = exportQueue.findIndex(r => r.sku === sku);
+  if (existing >= 0) exportQueue[existing] = data;
+  else exportQueue.push(data);
+  document.getElementById('queueCount').textContent = exportQueue.length;
+  document.getElementById('queueSection').style.display = '';
+  // Visual feedback
+  const btn = event.target;
+  btn.textContent = '✓ Added';
+  btn.style.color = '#2a7a4a';
+  btn.style.borderColor = '#2a7a4a';
+  setTimeout(() => { btn.textContent = '+ Add to export queue'; btn.style.color = ''; btn.style.borderColor = ''; }, 1500);
+}
+
+function buildXLSX(items) {
+  const out = [];
+  items.forEach(r => {
+    r.bullets.forEach((b, i) => {
+      out.push({
+        'SKU': i === 0 ? r.sku : '',
+        'Model Overview': i === 0 ? r.desc : '',
+        'Model Bullet Points': b,
+        'Model Bullet Order': i + 1
+      });
+    });
+  });
+  return out;
+}
+
+function exportSingle(id, sku) {
+  const data = getResultData(id, sku);
+  const out = buildXLSX([data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Model Content');
+  XLSX.writeFile(wb, 'model_content_' + (sku || 'export') + '_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+function exportQueue() {
+  if (!exportQueue.length) return;
+  const out = buildXLSX(exportQueue);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(out), 'Model Content');
+  XLSX.writeFile(wb, 'model_content_batch_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+</script>
+</body>
+</html>
