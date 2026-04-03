@@ -152,6 +152,13 @@ textarea.src::placeholder { color: #c0bbb2; }
 .btn-copy-html:hover { border-color: var(--accent); color: var(--accent); }
 .btn-copy-html.copied { border-color: #2a7a4a; color: #2a7a4a; }
 
+.faq-section { border-top: 1px solid var(--border-light); padding: 20px 24px; }
+.faq-section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+.faq-list { display: flex; flex-direction: column; gap: 12px; }
+.faq-item { background: var(--surface2); border-left: 3px solid #4a7fa5; padding: 12px 16px; }
+.faq-q { font-size: 13px; font-weight: 600; line-height: 1.4; margin-bottom: 6px; }
+.faq-a { font-size: 13px; line-height: 1.75; color: #3a3530; }
+
 .export-footer {
   background: var(--surface2); border-top: 1px solid var(--border);
   padding: 13px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -278,6 +285,7 @@ textarea.src::placeholder { color: #c0bbb2; }
 <script>
 let parsedProducts = [];
 let richSuggestions = [];
+let parsedFaqs = [];
 let accumulatedText = '';
 let richHtmlMap = {};
 
@@ -346,7 +354,7 @@ function toggleManual() {
 }
 
 function clearAll() {
-  parsedProducts = []; richSuggestions = []; accumulatedText = ''; richHtmlMap = {};
+  parsedProducts = []; richSuggestions = []; parsedFaqs = []; accumulatedText = ''; richHtmlMap = {};
   document.getElementById('resultsContainer').innerHTML = '';
   document.getElementById('clearBtn').style.display = 'none';
   setStatus('');
@@ -395,6 +403,17 @@ Fact density: [X] quantified specs used across 4 blocks
 Source quality: [Rich / Moderate / Thin] — [one sentence]
 Differentiation note: [confirm blocks pull from underemphasized angles, or flag overlap with standard PDP copy]
 Review flag: [None / specific concern]
+FAQ SUGGESTIONS:
+Q1: [Commonly asked question for this product category]
+A1: [Answer based on this specific product's specs and features — 40–60 words, complete sentences]
+Q2: [Second commonly asked question]
+A2: [Answer — 40–60 words]
+Q3: [Third question]
+A3: [Answer — 40–60 words]
+Q4: [Fourth question]
+A4: [Answer — 40–60 words]
+Q5: [Fifth question]
+A5: [Answer — 40–60 words]
 --- PRODUCT END ---
 
 ==== AI DISCOVERABILITY ====
@@ -408,6 +427,14 @@ Optimize all copy for AI and search discoverability. Begin the MODEL DESCRIPTION
 - SKU bullets only when SKUs have meaningful functional differences — size/color variants inherit model bullets
 - If processing multiple products, repeat the labeled block for each, then append: BATCH SUMMARY: [N] products processed.
 - Consumer-safe means: no guaranteed safety outcome claims, no named competitor comparisons, no medical/health language, no age-specific targeting, no claims requiring a disclaimer. Paraphrase vendor claims that cross these lines into factual capability statements.
+
+==== FAQ INSTRUCTIONS (apply to FAQ SUGGESTIONS section only) ====
+- Write 5–7 Q&A pairs per product
+- Questions should reflect what shoppers actually search or ask: compatibility, sizing, fit, what's included, care/maintenance, materials, safety/certifications, weight, recommended use
+- Answer using only information from the source — no invented specs or claims
+- Each answer: 40–60 words, complete sentences, no bullet points
+- Include the product name or specific details in answers so they read as authoritative, not generic
+- Do not ask or answer questions about price
 
 ==== RICH CONTENT INSTRUCTIONS (apply to RICH CONTENT SUGGESTIONS section only) ====
 
@@ -549,6 +576,7 @@ async function runTransformer() {
     if (products.length) {
       parsedProducts = parsedProducts.concat(products.map(p => p.rows).flat());
       richSuggestions = richSuggestions.concat(products.map(p => p.rich).flat());
+      products.forEach(p => { (p.faqs || []).forEach(f => parsedFaqs.push({ product: p.name, q: f.q, a: f.a })); });
       renderResults(products);
       setStatus(`Done — ${products.length} product${products.length > 1 ? 's' : ''} parsed`, 'done');
       document.getElementById('clearBtn').style.display = 'inline';
@@ -593,7 +621,7 @@ function parseOutput(rawText) {
 
 function getField(text, label) {
   const labels = ['NAME \\(Long Description\\)','BRAND','TAXONOMY NODE','MODEL CODE',
-    'MODEL DESCRIPTION','MODEL BULLETS','SKU BULLETS','RICH CONTENT SUGGESTIONS','SELF-AUDIT','---\\s*PRODUCT'];
+    'MODEL DESCRIPTION','MODEL BULLETS','SKU BULLETS','RICH CONTENT SUGGESTIONS','SELF-AUDIT','FAQ SUGGESTIONS','---\\s*PRODUCT'];
   const idx = labels.findIndex(l => new RegExp(l,'i').test(label));
   const nextLabels = labels.slice(idx + 1).join('|');
   const re = new RegExp(`${label}\\s*:\\s*([\\s\\S]*?)(?=(?:${nextLabels})|$)`, 'i');
@@ -659,7 +687,28 @@ function parseBlock(block) {
     if (headline) rich.push({ headline, bullets });
   }
 
-  return { name, brand, taxonomy, taxonomySuggested, modelBullets, skuGroups, modelDesc, modelCode, rows, rich };
+  const faqs = [];
+  const faqRaw = getField(block, 'FAQ SUGGESTIONS');
+  if (faqRaw) {
+    const lines = faqRaw.split('\n');
+    let currentQ = null, currentA = [];
+    for (const line of lines) {
+      const qMatch = line.match(/^Q\d+:\s*(.+)/);
+      const aMatch = line.match(/^A\d+:\s*(.+)/);
+      if (qMatch) {
+        if (currentQ && currentA.length) faqs.push({ q: currentQ, a: currentA.join(' ').trim() });
+        currentQ = qMatch[1].trim();
+        currentA = [];
+      } else if (aMatch && currentQ) {
+        currentA = [aMatch[1].trim()];
+      } else if (currentQ && currentA.length && line.trim()) {
+        currentA.push(line.trim());
+      }
+    }
+    if (currentQ && currentA.length) faqs.push({ q: currentQ, a: currentA.join(' ').trim() });
+  }
+
+  return { name, brand, taxonomy, taxonomySuggested, modelBullets, skuGroups, modelDesc, modelCode, rows, rich, faqs };
 }
 
 function renderResults(products) {
@@ -720,6 +769,18 @@ function renderResults(products) {
       </div>`;
     }
 
+    if (prod.faqs && prod.faqs.length) {
+      html += `<div class="faq-section">
+        <div class="faq-section-label">FAQ Suggestions (${prod.faqs.length})</div>
+        <div class="faq-list">
+          ${prod.faqs.map(f => `<div class="faq-item">
+            <div class="faq-q">${esc(f.q)}</div>
+            <div class="faq-a">${esc(f.a)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     html += `</div>`; // close result-card
   });
 
@@ -749,6 +810,15 @@ function downloadXlsx() {
   });
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Enterworks Import');
+
+  if (parsedFaqs.length) {
+    const faqHeaders = ['Product', 'Question', 'Answer'];
+    const faqRows = [faqHeaders, ...parsedFaqs.map(f => [f.product, f.q, f.a])];
+    const faqWs = XLSX.utils.aoa_to_sheet(faqRows);
+    faqWs['!cols'] = [{ wch: 40 }, { wch: 55 }, { wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, faqWs, 'FAQ Suggestions');
+  }
+
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
   const a = document.createElement('a');
   a.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${wbout}`;
@@ -764,6 +834,7 @@ function parseManual() {
   if (products.length) {
     parsedProducts = parsedProducts.concat(products.map(p => p.rows).flat());
     richSuggestions = richSuggestions.concat(products.map(p => p.rich).flat());
+    products.forEach(p => { (p.faqs || []).forEach(f => parsedFaqs.push({ product: p.name, q: f.q, a: f.a })); });
     renderResults(products);
     setStatus(`Parsed ${products.length} product${products.length > 1 ? 's' : ''} from manual input`, 'done');
     document.getElementById('clearBtn').style.display = 'inline';
