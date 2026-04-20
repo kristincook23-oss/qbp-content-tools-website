@@ -82,12 +82,12 @@
          onclick="document.getElementById('file-input').click()">
       <div class="icon">📋</div>
       <h2 id="drop-title">Upload Product Setup Template</h2>
-      <p id="drop-sub">Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.8">Reads: QBP Part Number · Brand · SAP Short Description</span></p>
+      <p id="drop-sub">Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.8">Reads: QBP Part Number · Brand · Supplier Description</span></p>
       <input id="file-input" type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFile(this.files[0])">
     </div>
 
     <div class="hint-box" id="hint-template">
-      <strong>Product Setup Template:</strong> Uses the standard newmat template. Reads SKU from <em>QBP Prefix/Part Number</em>, brand from <em>Sales Material Group 1</em>, and short desc from <em>SAP Short Description</em>.
+      <strong>Product Setup Template:</strong> Uses the standard newmat template. Reads SKU from <em>QBP Prefix/Part Number</em>, brand from <em>Sales Material Group 1</em>, and description from <em>Supplier Description</em>.
     </div>
     <div class="hint-box" id="hint-simple" style="display:none">
       <strong>Simple SKU List:</strong> Your spreadsheet needs at minimum two columns: <strong>SKU</strong> (or <em>Material ID</em>) and <strong>Short Description</strong> (or <em>SAP Short Description</em>). Optionally include a <strong>Brand</strong> column. Column names are flexible — the tool will find the right ones.
@@ -130,7 +130,7 @@ function setMode(m) {
   document.getElementById('tab-simple').className = 'mode-tab' + (m === 'simple' ? ' active' : '');
   document.getElementById('drop-title').textContent = m === 'template' ? 'Upload Product Setup Template' : 'Upload SKU + Short Desc List';
   document.getElementById('drop-sub').innerHTML = m === 'template'
-    ? 'Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.8">Reads: QBP Part Number · Brand · SAP Short Description</span>'
+    ? 'Drop an .xlsx here or click to browse<br><span style="font-size:11px;opacity:0.8">Reads: QBP Part Number · Brand · Supplier Description</span>'
     : 'Drop an .xlsx or .csv here or click to browse<br><span style="font-size:11px;opacity:0.8">Needs: SKU · Short Description (Brand optional)</span>';
   document.getElementById('hint-template').style.display = m === 'template' ? '' : 'none';
   document.getElementById('hint-simple').style.display = m === 'simple' ? '' : 'none';
@@ -194,7 +194,7 @@ function parseInput(raw, mode) {
   if (mode === 'template') {
     skuCol    = findCol(sample, ['QBP Prefix', 'Part Number', 'SKU', 'Material ID']);
     brandCol  = findCol(sample, ['Sales Material Group 1', 'Brand']);
-    shortCol  = findCol(sample, ['SAP Short Description', 'Short Description', 'Description']);
+    shortCol  = findCol(sample, ['Supplier Description', 'SAP Short Description', 'Short Description', 'Description']);
   } else {
     skuCol    = findCol(sample, ['SKU', 'Material ID', 'Part Number', 'QBP']);
     brandCol  = findCol(sample, ['Brand', 'Sales Material Group 1']);
