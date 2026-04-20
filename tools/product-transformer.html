@@ -522,7 +522,20 @@ async function runTransformer() {
       : { type: 'image', source: { type: 'base64', media_type: currentFile.mediaType, data: currentFile.base64 } };
     messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt('the attached sell sheet / product file') }] }];
   } else {
-    messages = [{ role: 'user', content: buildPrompt(source) }];
+    const urlMode = document.getElementById('modeUrl').classList.contains('active');
+    let resolvedSource = source;
+    if (urlMode && source.startsWith('http')) {
+      setStatus('Fetching page content…', 'running');
+      try {
+        const jinaRes = await fetch('https://r.jina.ai/' + source);
+        if (jinaRes.ok) {
+          resolvedSource = await jinaRes.text();
+        }
+      } catch (e) {
+        // fall back to passing URL directly if fetch fails
+      }
+    }
+    messages = [{ role: 'user', content: buildPrompt(resolvedSource) }];
   }
 
   try {
