@@ -222,6 +222,8 @@ const SPEC_PATTERNS = [
   { re: /\b\d+(?:\.\d+)?\s*(?:ml|fl\.?\s*oz|oz|liter|litre|[Ll](?=\b))\b/g },
   // Weight: 100g, 1kg, 500g
   { re: /\b\d+(?:\.\d+)?\s*(?:kg|g(?=\b))\b/g },
+  // Size ranges FIRST: (52-56cm), 52-56cm, 55-58 cm — must come before general cm pattern
+  { re: /\(?\b\d+[\s-]+\d+\s*cm\b\)?/gi, fmt: m => m.replace(/[()]/g,'').trim() },
   // Diameter / length: 31.8mm, 100mm, 26", 700c, 29er, 27.5"
   { re: /\b\d+(?:\.\d+)?(?:mm|cm|m(?=\b)|in(?=\b)|")\b/g },
   { re: /\b\d+(?:\.\d+)?[cC]\b/g },
@@ -229,8 +231,8 @@ const SPEC_PATTERNS = [
   { re: /\(set of \d+\)/gi,         fmt: m => 'Set of ' + m.match(/\d+/)[0] },
   { re: /\bset of \d+\b/gi,         fmt: m => 'Set of ' + m.match(/\d+/)[0] },
   { re: /\b\d+[\s-]?(?:pack|pk|pc|piece|ct)\b/gi, fmt: m => m.charAt(0).toUpperCase() + m.slice(1).replace(/\s+/g,' ') },
-  // Apparel sizes
-  { re: /\b(?:XS|SM|MD|LG|XL|XXL|2XL|3XL|S\/M|M\/L|L\/XL)\b/g },
+  // Apparel/helmet sizes — standalone S/M/L plus extended sizes
+  { re: /\b(?:XS|XL|XXL|2XL|3XL|S\/M|M\/L|L\/XL|SM|MD|LG|S|M|L)\b/g },
   // Speed: 11-speed, 12spd
   { re: /\b\d+[\s-]?(?:speed|spd|sp)\b/gi, fmt: m => m.replace(/\s+/g,'-').replace(/-?spd/i,'-Speed').replace(/-?speed/i,'-Speed') },
   // Chainring/tooth count: 50/34t, 36t
@@ -244,9 +246,10 @@ const SPEC_PATTERNS = [
 function buildRow(sku, shortDesc, brand) {
   let working = shortDesc;
 
-  // Remove brand from start if present
-  if (brand && working.toLowerCase().startsWith(brand.toLowerCase())) {
-    working = working.slice(brand.length).trim();
+  // Remove brand from start if present — handle pluralization e.g. "MET Helmets" when brand is "MET Helmet"
+  if (brand) {
+    const escapedBrand = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    working = working.replace(new RegExp('^' + escapedBrand + 's?\\s*', 'i'), '').trim();
   }
 
   // Extract color — look for color word(s), prefer at end
