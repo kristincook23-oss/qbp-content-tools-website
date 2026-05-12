@@ -351,8 +351,16 @@ async function runBuilder() {
       { type: 'document', source: { type: 'base64', media_type: currentFile.mediaType, data: currentFile.base64 } }
     ];
   } else {
-    const label = source.startsWith('http') ? 'Product URL: ' : 'Product copy:\n';
-    userContent = label + source + '\n\nGenerate model-level content. Return ONLY the formatted output as specified.';
+    let resolvedSource = source;
+    if (source.startsWith('http')) {
+      setStatus('Fetching page content…', 'running');
+      try {
+        const jinaRes = await fetch('https://r.jina.ai/' + source);
+        if (jinaRes.ok) resolvedSource = await jinaRes.text();
+      } catch (e) { /* fall back to URL string if fetch fails */ }
+    }
+    const label = resolvedSource.startsWith('http') ? 'Product URL: ' : 'Product copy:\n';
+    userContent = label + resolvedSource + '\n\nGenerate model-level content. Return ONLY the formatted output as specified.';
   }
 
   // Animate progress
