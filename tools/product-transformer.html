@@ -657,9 +657,18 @@ function parseBlock(block) {
 
   if (!name && !brand) return null;
 
+  // Strip em-dashes from bullets — enforced in code regardless of Claude's output
+  function cleanBullet(b) {
+    if (!b.includes(' — ')) return b;
+    const [first, ...rest] = b.split(' — ');
+    const second = rest.join(' — ').trim();
+    return first.trim() + ', ' + second.charAt(0).toLowerCase() + second.slice(1);
+  }
+
   const modelBullets = modelBulletsRaw
     .split('\n')
     .map(l => l.replace(/^\d+\.\s*/, '').replace(/^[-•]\s*/, '').trim())
+    .map(cleanBullet)
     .filter(Boolean);
 
   const skuGroups = [];
@@ -670,6 +679,7 @@ function parseBlock(block) {
       const skuId = lines[0].replace(/:$/, '').trim();
       const bullets = lines.slice(1)
         .map(l => l.replace(/^\d+\.\s*/, '').replace(/^[-•]\s*/, '').trim())
+        .map(cleanBullet)
         .filter(Boolean);
       if (bullets.length) skuGroups.push({ sku: skuId, bullets });
     }
