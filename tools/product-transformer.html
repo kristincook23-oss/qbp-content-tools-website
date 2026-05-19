@@ -268,6 +268,12 @@ textarea.src::placeholder { color: #c0bbb2; }
       <div class="step-num">3</div>
       <div class="step-label">Generate</div>
     </div>
+    <div style="margin-bottom:10px;">
+      <label style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--text);cursor:pointer;">
+        <input type="checkbox" id="includeFaqs" checked style="width:14px;height:14px;cursor:pointer;">
+        Include FAQ suggestions
+      </label>
+    </div>
     <div class="gen-row">
       <button class="btn-run" id="runBtn" onclick="runTransformer()">Run Transformer</button>
       <button class="btn-clear-link" id="clearBtn" onclick="clearAll()">Clear all</button>
@@ -439,7 +445,7 @@ function clearAll() {
   setStatus('');
 }
 
-function buildPrompt(source) {
+function buildPrompt(source, includeFaqs = true) {
   return `You are a product content specialist for QBP (Quality Bicycle Products), and for the Rich Content section you are acting as the QBP Rich Content Builder. Given vendor product information, generate structured content for Enterworks PIM import.
 
 For each product, output EXACTLY these labeled sections in order. Use plain text labels (no markdown headers, no asterisks, no bold):
@@ -482,7 +488,7 @@ Fact density: [X] quantified specs used across 4 blocks
 Source quality: [Rich / Moderate / Thin] — [one sentence]
 Differentiation note: [confirm blocks pull from underemphasized angles, or flag overlap with standard PDP copy]
 Review flag: [None / specific concern]
-FAQ SUGGESTIONS:
+${includeFaqs ? `FAQ SUGGESTIONS:
 Q1: [Commonly asked question for this product category]
 A1: [Answer based on this specific product's specs and features — 40–60 words, complete sentences]
 Q2: [Second commonly asked question]
@@ -492,7 +498,7 @@ A3: [Answer — 40–60 words]
 Q4: [Fourth question]
 A4: [Answer — 40–60 words]
 Q5: [Fifth question]
-A5: [Answer — 40–60 words]
+A5: [Answer — 40–60 words]` : ''}
 --- PRODUCT END ---
 
 ==== AI DISCOVERABILITY ====
@@ -515,6 +521,7 @@ Optimize all copy for AI and search discoverability. Begin the MODEL DESCRIPTION
 - Each answer: 40–60 words, complete sentences, no bullet points
 - Include the product name or specific details in answers so they read as authoritative, not generic
 - Do not ask or answer questions about price
+${includeFaqs ? '' : '(FAQ SUGGESTIONS section omitted for this run.)'}
 
 ==== RICH CONTENT INSTRUCTIONS (apply to RICH CONTENT SUGGESTIONS section only) ====
 
@@ -612,7 +619,8 @@ async function runTransformer() {
     const contentBlock = docType === 'document'
       ? { type: 'document', source: { type: 'base64', media_type: currentFile.mediaType, data: currentFile.base64 } }
       : { type: 'image', source: { type: 'base64', media_type: currentFile.mediaType, data: currentFile.base64 } };
-    messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt('the attached sell sheet / product file') }] }];
+    const faqs = document.getElementById('includeFaqs').checked;
+    messages = [{ role: 'user', content: [contentBlock, { type: 'text', text: buildPrompt('the attached sell sheet / product file', faqs) }] }];
   } else {
     const urlMode = document.getElementById('modeUrl').classList.contains('active');
     let resolvedSource = source;
@@ -627,7 +635,8 @@ async function runTransformer() {
         // fall back to passing URL directly if fetch fails
       }
     }
-    messages = [{ role: 'user', content: buildPrompt(resolvedSource) }];
+    const faqs = document.getElementById('includeFaqs').checked;
+    messages = [{ role: 'user', content: buildPrompt(resolvedSource, faqs) }];
   }
 
   try {
@@ -745,7 +754,7 @@ async function runBatch() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 8000,
-          messages: [{ role: 'user', content: buildPrompt(sourceText) }],
+          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked) }],
         }),
       });
 
