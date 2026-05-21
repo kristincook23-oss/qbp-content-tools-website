@@ -214,8 +214,8 @@
           <div class="zone-title">New SKU List</div>
           <div class="zone-hint">
             Drop .xlsx here or click to browse.<br>
-            Needs columns: <code>Material ID</code>, <code>Short Description</code><br>
-            <code>Vendor Part #</code> recommended. <code>Brand</code> optional.
+            Needs: Part Number (or QBP Prefix/Part Number, Material ID)<br>
+            + Description (or SAP Short Description). Brand optional.
           </div>
           <div class="zone-file-info hidden" id="zone1Info"></div>
         </div>
@@ -375,13 +375,13 @@ function processSkuFile(data) {
   if (data.length < 2) return showError('New SKU file appears to be empty.');
   const headers = data[0].map(h => String(h || ''));
   skuCols = {
-    matId:   findCol(headers, ['material id', 'mat id', 'materialid', 'mat_id']),
-    vendor:  findCol(headers, ['vendor part', 'part #', 'part#', 'vpn', 'vendor_part']),
-    desc:    findCol(headers, ['short description', 'short desc', 'description', 'desc']),
-    brand:   findCol(headers, ['brand'])
+    matId:   findCol(headers, ['material id', 'mat id', 'materialid', 'mat_id', 'qbp prefix', 'qbp part', 'part number', 'part no', 'sku']),
+    vendor:  findCol(headers, ['vendor part', 'part #', 'part#', 'vpn', 'vendor_part', 'supplier part']),
+    desc:    findCol(headers, ['short description', 'short desc', 'sap short', 'description', 'desc']),
+    brand:   findCol(headers, ['brand', 'sales material group 1'])
   };
   if (skuCols.matId === -1 || skuCols.desc === -1) {
-    return showError('New SKU file must have "Material ID" and "Short Description" columns.');
+    return showError('Could not find SKU/Part Number or Description columns. Columns detected: ' + headers.join(', '));
   }
   skuRows = data.slice(1).filter(r => r[skuCols.matId] || r[skuCols.desc]);
   updateZone('zone1', `${skuRows.length} SKUs loaded`, 'zone1Info');
