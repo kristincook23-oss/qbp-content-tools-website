@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Model Mapper</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --paper: #f5f2ec;
+    --paper-warm: #ede9df;
+    --rule: #c8bfa8;
+    --rule-light: #e0d9cc;
+    --accent: #b84c1e;
+    --accent-muted: #e8d5cc;
+    --font-body: 'Libre Baskerville', Georgia, serif;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --green-bg: #d6edda;
+    --green-border: #4a9458;
+    --green-text: #1a4d24;
+    --yellow-bg: #fef3d0;
+    --yellow-border: #c9a227;
+    --yellow-text: #5a3d00;
+    --blue-bg: #ddeaf8;
+    --blue-border: #3a65b0;
+    --blue-text: #1a2e6e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-body); background: var(--paper); color: var(--ink); min-height: 100vh; }
+
+  header {
+    background: var(--ink); color: var(--paper);
+    padding: 18px 32px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+    border-bottom: 3px solid var(--accent);
+  }
+  header h1 { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 500; }
+  header .subtitle { font-family: var(--font-mono); font-size: 11px; color: #888; letter-spacing: 0.08em; }
+  .btn {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 7px 14px; border: 1px solid currentColor;
+    cursor: pointer; transition: all 0.15s; background: transparent; text-decoration: none; display: inline-block;
+  }
+  .btn-ghost { color: #aaa; border-color: #444; }
+  .btn-ghost:hover { color: var(--paper); border-color: var(--paper); }
+  .btn-primary { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  .btn-primary:hover { background: #333; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-accent { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+  .btn-accent:hover { background: #9a3d18; }
+  .btn-confirm { color: var(--green-text); background: var(--green-bg); border-color: var(--green-border); }
+  .btn-confirm:hover { background: #c0e2c5; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 40px 32px 80px; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #999; margin-bottom: 10px; }
+  h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .description { font-size: 14px; line-height: 1.7; color: #555; max-width: 640px; margin-bottom: 32px; }
+
+  .panel-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #999; margin-bottom: 8px; }
+
+  /* ─── UPLOAD GRID ─── */
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .upload-zone {
+    border: 2px dashed var(--rule); background: var(--paper-warm);
+    padding: 28px 24px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: var(--accent-muted); }
+  .upload-zone.loaded { border-style: solid; border-color: var(--green-border); background: var(--green-bg); }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .zone-icon { font-size: 28px; margin-bottom: 10px; }
+  .zone-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; margin-bottom: 6px; }
+  .zone-hint { font-size: 12px; color: #777; line-height: 1.5; }
+  .zone-hint code { font-family: var(--font-mono); font-size: 11px; background: rgba(0,0,0,0.06); padding: 1px 5px; }
+  .zone-file-info { font-family: var(--font-mono); font-size: 11px; color: var(--green-text); font-weight: 500; margin-top: 8px; }
+
+  /* ─── API KEY ─── */
+  .field-row { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+  .field-group { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 260px; }
+  .field-group label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #777; }
+  .field-group input {
+    font-family: var(--font-mono); font-size: 12px; padding: 9px 12px;
+    border: 1px solid var(--rule); background: white; color: var(--ink);
+    outline: none; transition: border-color 0.15s; width: 100%;
+  }
+  .field-group input:focus { border-color: var(--accent); }
+
+  /* ─── PROGRESS ─── */
+  .progress-panel { background: var(--paper-warm); border: 1px solid var(--rule); padding: 24px; margin-bottom: 24px; }
+  .step-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+  .step-row + .step-row { border-top: 1px solid var(--rule-light); }
+  .step-dot {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500; flex-shrink: 0;
+  }
+  .step-dot.pending { background: var(--paper-warm); border: 2px solid var(--rule); color: #aaa; }
+  .step-dot.running { background: #fff8e6; border: 2px solid var(--yellow-border); color: var(--yellow-text); animation: pulse 1.2s ease-in-out infinite; }
+  .step-dot.done { background: var(--green-bg); border: 2px solid var(--green-border); color: var(--green-text); }
+  .step-dot.error { background: #fde8e8; border: 2px solid #c0392b; color: #c0392b; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .step-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; }
+  .step-label strong { font-weight: 500; display: block; margin-bottom: 2px; }
+  .step-label span { color: #777; font-size: 10px; }
+
+  /* ─── CONFIRM BANNER ─── */
+  .confirm-banner {
+    background: var(--paper-warm); border: 1px solid var(--rule);
+    border-left: 4px solid var(--green-border); padding: 20px 24px; margin-bottom: 24px;
+  }
+  .confirm-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--green-text); margin-bottom: 10px; }
+  .confirm-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 11px; padding: 4px 10px;
+    background: white; border: 1px solid var(--rule); color: var(--ink);
+  }
+  .chip.highlight { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+  .confirm-actions { display: flex; gap: 10px; }
+
+  /* ─── RESULTS ─── */
+  .results-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .results-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .results-summary { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rec-badge {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; padding: 4px 10px;
+    border: 1px solid; font-weight: 500;
+  }
+  .rec-badge.variant { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+  .rec-badge.grouped { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow-text); }
+  .rec-badge.standalone { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue-text); }
+
+  /* ─── TABLE ─── */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 10px 12px; text-align: left;
+    background: var(--ink); color: var(--paper); white-space: nowrap; font-weight: 500;
+  }
+  tbody tr { border-bottom: 1px solid var(--rule-light); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 10px 12px; vertical-align: top; line-height: 1.5; }
+  td.mat-id { font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+  td.description { max-width: 240px; }
+  td.notes { max-width: 260px; color: #555; font-size: 11px; }
+  td.group { font-family: var(--font-mono); font-size: 10px; color: #555; max-width: 160px; }
+  td.model { font-family: var(--font-mono); font-size: 10px; max-width: 180px; }
+
+  .rec-pill {
+    display: inline-block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.07em;
+    text-transform: uppercase; padding: 3px 8px; border: 1px solid; white-space: nowrap; font-weight: 500;
+  }
+  .rec-pill.variant { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+  .rec-pill.grouped { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow-text); }
+  .rec-pill.standalone { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue-text); }
+
+  tr.row-variant { background: #f5fbf6; }
+  tr.row-grouped { background: #fdfbf2; }
+  tr.row-standalone { background: #f4f7fd; }
+
+  /* ─── HOW IT WORKS ─── */
+  .how-it-works { background: var(--paper-warm); border: 1px solid var(--rule); padding: 20px 24px; margin-top: 40px; }
+  .how-it-works .label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #999; margin-bottom: 12px; }
+  .how-it-works ol { padding-left: 18px; font-size: 13px; line-height: 2; color: #555; }
+  .how-it-works li { margin-bottom: 4px; }
+  .how-it-works code { font-family: var(--font-mono); font-size: 11px; background: white; border: 1px solid var(--rule-light); padding: 1px 5px; color: var(--accent); }
+
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #555; }
+  .legend-swatch { width: 14px; height: 14px; border: 1px solid; flex-shrink: 0; }
+  .legend-swatch.variant { background: var(--green-bg); border-color: var(--green-border); }
+  .legend-swatch.grouped { background: var(--yellow-bg); border-color: var(--yellow-border); }
+  .legend-swatch.standalone { background: var(--blue-bg); border-color: var(--blue-border); }
+
+  .error-banner { background: #fde8e8; border: 1px solid #c0392b; border-left: 4px solid #c0392b; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; color: #7a1515; }
+  .divider { border: none; border-top: 1px solid var(--rule-light); margin: 28px 0; }
+  .hidden { display: none !important; }
+  .warning-note { font-family: var(--font-mono); font-size: 10px; color: #c9a227; padding: 6px 10px; background: var(--yellow-bg); border: 1px solid var(--yellow-border); margin-top: 8px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Product Model Mapper</h1>
+    <div class="subtitle">PIM Modeling Recommendations — SKU Setup Tool</div>
+  </div>
+  <a class="btn btn-ghost" href="../index.html">← All Tools</a>
+</header>
+
+<main>
+  <div class="eyebrow">QBP Content Tools</div>
+  <h2>Product Model Mapper</h2>
+  <p class="description">
+    Upload a new SKU list and your content report export. The tool identifies matching brand families
+    automatically, then recommends whether each SKU should be added as a variant under an existing model,
+    grouped into a new model with related SKUs, or set up as a standalone model.
+  </p>
+
+  <!-- ── SETUP PANEL ── -->
+  <div id="setupPanel">
+    <div class="panel-label">Step 1 — Upload Files</div>
+    <div class="upload-grid">
+
+      <div>
+        <div class="panel-label" style="margin-bottom:6px;">New SKU List</div>
+        <div class="upload-zone" id="zone1"
+          ondragover="handleDrag(event,'zone1',true)"
+          ondragleave="handleDrag(event,'zone1',false)"
+          ondrop="handleDrop(event,'sku')">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFileInput(event,'sku')">
+          <div class="zone-icon">📋</div>
+          <div class="zone-title">New SKU List</div>
+          <div class="zone-hint">
+            Drop .xlsx here or click to browse.<br>
+            Needs columns: <code>Material ID</code>, <code>Short Description</code><br>
+            <code>Vendor Part #</code> recommended. <code>Brand</code> optional.
+          </div>
+          <div class="zone-file-info hidden" id="zone1Info"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label" style="margin-bottom:6px;">Content Report Export</div>
+        <div class="upload-zone" id="zone2"
+          ondragover="handleDrag(event,'zone2',true)"
+          ondragleave="handleDrag(event,'zone2',false)"
+          ondrop="handleDrop(event,'catalog')">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFileInput(event,'catalog')">
+          <div class="zone-icon">📊</div>
+          <div class="zone-title">Content Report</div>
+          <div class="zone-hint">
+            Full or filtered export from PIM.<br>
+            Needs columns: <code>Material ID</code>, <code>Short Description</code>,<br>
+            <code>Model Code</code>, <code>Model Description</code>, <code>Brand</code>
+          </div>
+          <div class="zone-file-info hidden" id="zone2Info"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="field-row">
+      <div class="field-group">
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="checkReady()">
+      </div>
+      <button class="btn btn-primary" id="runBtn" onclick="run()" disabled style="height:38px;white-space:nowrap;">
+        Run Model Analysis →
+      </button>
+    </div>
+  </div>
+
+  <!-- ── PROGRESS PANEL ── -->
+  <div id="progressPanel" class="hidden">
+    <div class="progress-panel">
+      <div class="step-row">
+        <div class="step-dot pending" id="dot1">1</div>
+        <div class="step-label">
+          <strong>Brand Family Matching</strong>
+          <span id="step1Msg">Waiting to start…</span>
+        </div>
+      </div>
+      <div class="step-row">
+        <div class="step-dot pending" id="dot2">2</div>
+        <div class="step-label">
+          <strong>Modeling Analysis</strong>
+          <span id="step2Msg">Waiting for brand match…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BRAND CONFIRM PANEL ── -->
+  <div id="confirmPanel" class="hidden">
+    <div class="confirm-banner">
+      <div class="confirm-title">✓ Brand Match Complete — Review Before Proceeding</div>
+      <div id="confirmChips" class="confirm-chips"></div>
+      <div id="confirmNote" style="font-size:12px;color:#555;margin-bottom:14px;"></div>
+      <div class="confirm-actions">
+        <button class="btn btn-confirm" onclick="proceedWithAnalysis()">Proceed with Analysis →</button>
+        <button class="btn btn-ghost" onclick="cancelRun()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ERROR BANNER ── -->
+  <div id="errorBanner" class="error-banner hidden"></div>
+
+  <!-- ── RESULTS PANEL ── -->
+  <div id="resultsPanel" class="hidden">
+    <hr class="divider">
+    <div class="results-header">
+      <div class="results-title">Modeling Recommendations</div>
+      <div class="results-summary" id="resultsSummary"></div>
+    </div>
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Material ID</th>
+            <th>Short Description</th>
+            <th>Recommendation</th>
+            <th>Target Model Code</th>
+            <th>Target Model Description</th>
+            <th>Group With</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-accent" onclick="downloadExcel()">Download Excel</button>
+      <button class="btn btn-ghost" onclick="resetTool()">Run Another</button>
+    </div>
+  </div>
+
+  <!-- ── HOW IT WORKS ── -->
+  <div class="how-it-works">
+    <div class="label">How It Works</div>
+    <ol>
+      <li>Upload your new SKU list (Material ID + Short Description required, Vendor Part # and Brand helpful).</li>
+      <li>Upload your full or filtered content report export from the PIM.</li>
+      <li><strong>Call 1:</strong> Claude reads product descriptions from your new SKU list and all unique brand names from the content report, then identifies which catalog brands belong to the same family — handling abbreviations, sub-brands, and name variations automatically.</li>
+      <li>You review the matched brands and row count before the main analysis runs.</li>
+      <li><strong>Call 2:</strong> Claude compares each new SKU against the filtered catalog and returns a structured recommendation for every SKU.</li>
+      <li>Download an Excel file with color-coded recommendations ready for your modeling workflow.</li>
+    </ol>
+    <div class="legend" style="margin-top:16px;">
+      <div class="legend-item"><div class="legend-swatch variant"></div>Add Variant — joins an existing model</div>
+      <div class="legend-item"><div class="legend-swatch grouped"></div>New Model — Grouped with related SKUs</div>
+      <div class="legend-item"><div class="legend-swatch standalone"></div>New Model — Standalone</div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let skuRows = [];       // parsed new SKU data
+let catalogRows = [];   // parsed full catalog data
+let matchedBrands = []; // brand names Claude identified from catalog
+let filteredCatalog = [];
+let analysisResults = [];
+
+// Column indices for new SKU file
+let skuCols = {};
+// Column indices for catalog file
+let catCols = {};
+
+// ── COLUMN DETECTION ──────────────────────────────────────────────────────
+function findCol(headers, candidates) {
+  const lower = headers.map(h => String(h || '').toLowerCase().trim());
+  for (const c of candidates) {
+    const i = lower.findIndex(h => h.includes(c.toLowerCase()));
+    if (i !== -1) return i;
+  }
+  return -1;
+}
+
+// ── FILE PARSING ──────────────────────────────────────────────────────────
+function parseFile(file, callback) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    callback(data);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processSkuFile(data) {
+  if (data.length < 2) return showError('New SKU file appears to be empty.');
+  const headers = data[0].map(h => String(h || ''));
+  skuCols = {
+    matId:   findCol(headers, ['material id', 'mat id', 'materialid', 'mat_id']),
+    vendor:  findCol(headers, ['vendor part', 'part #', 'part#', 'vpn', 'vendor_part']),
+    desc:    findCol(headers, ['short description', 'short desc', 'description', 'desc']),
+    brand:   findCol(headers, ['brand'])
+  };
+  if (skuCols.matId === -1 || skuCols.desc === -1) {
+    return showError('New SKU file must have "Material ID" and "Short Description" columns.');
+  }
+  skuRows = data.slice(1).filter(r => r[skuCols.matId] || r[skuCols.desc]);
+  updateZone('zone1', `${skuRows.length} SKUs loaded`, 'zone1Info');
+  checkReady();
+}
+
+function processCatalogFile(data) {
+  if (data.length < 2) return showError('Content report appears to be empty.');
+  const headers = data[0].map(h => String(h || ''));
+  catCols = {
+    matId:  findCol(headers, ['material id', 'mat id', 'materialid']),
+    desc:   findCol(headers, ['short description', 'short desc', 'description']),
+    model:  findCol(headers, ['model code']),
+    modelD: findCol(headers, ['model description']),
+    brand:  findCol(headers, ['brand']),
+    cat:    findCol(headers, ['category'])
+  };
+  if (catCols.matId === -1 || catCols.brand === -1) {
+    return showError('Content report must have "Material ID" and "Brand" columns.');
+  }
+  catalogRows = data.slice(1).filter(r => r[catCols.matId]);
+  updateZone('zone2', `${catalogRows.length.toLocaleString()} catalog SKUs loaded`, 'zone2Info');
+  checkReady();
+}
+
+// ── DRAG / DROP / FILE INPUT ───────────────────────────────────────────────
+function handleDrag(e, zoneId, over) {
+  e.preventDefault();
+  document.getElementById(zoneId).classList.toggle('drag-over', over);
+}
+function handleDrop(e, type) {
+  e.preventDefault();
+  const zoneId = type === 'sku' ? 'zone1' : 'zone2';
+  document.getElementById(zoneId).classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file, type);
+}
+function handleFileInput(e, type) { if (e.target.files[0]) handleFile(e.target.files[0], type); }
+function handleFile(file, type) {
+  parseFile(file, data => {
+    if (type === 'sku') processSkuFile(data);
+    else processCatalogFile(data);
+  });
+}
+function updateZone(zoneId, msg, infoId) {
+  document.getElementById(zoneId).classList.add('loaded');
+  const info = document.getElementById(infoId);
+  info.textContent = '✓ ' + msg;
+  info.classList.remove('hidden');
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────────────────────
+function checkReady() {
+  const ready = skuRows.length > 0 && catalogRows.length > 0 &&
+                document.getElementById('apiKey').value.trim().length > 10;
+  document.getElementById('runBtn').disabled = !ready;
+}
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = '⚠ ' + msg;
+  el.classList.remove('hidden');
+  document.getElementById('progressPanel').classList.add('hidden');
+}
+function hideError() { document.getElementById('errorBanner').classList.add('hidden'); }
+function setStep(n, state, msg) {
+  const dot = document.getElementById('dot' + n);
+  dot.className = 'step-dot ' + state;
+  dot.textContent = state === 'done' ? '✓' : state === 'error' ? '✕' : n;
+  document.getElementById('step' + n + 'Msg').textContent = msg;
+}
+
+// ── API CALL ───────────────────────────────────────────────────────────────
+async function claudeCall(apiKey, systemPrompt, userContent, maxTokens = 4096) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userContent }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text;
+}
+
+function extractJson(text) {
+  const match = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON found in response');
+  return JSON.parse(match[0]);
+}
+
+// ── MAIN RUN FLOW ──────────────────────────────────────────────────────────
+async function run() {
+  hideError();
+  const apiKey = document.getElementById('apiKey').value.trim();
+  document.getElementById('setupPanel').classList.add('hidden');
+  document.getElementById('progressPanel').classList.remove('hidden');
+  document.getElementById('confirmPanel').classList.add('hidden');
+  document.getElementById('resultsPanel').classList.add('hidden');
+
+  // ── CALL 1: Brand Matching ──
+  setStep(1, 'running', 'Reading brand names from both files…');
+  try {
+    // Extract sample descriptions from new SKU list
+    const sampleDescs = skuRows.slice(0, 25).map(r => String(r[skuCols.desc] || '')).filter(Boolean);
+
+    // Extract unique brands from catalog
+    const allCatalogBrands = [...new Set(
+      catalogRows.map(r => String(r[catCols.brand] || '').trim()).filter(Boolean)
+    )].sort();
+
+    const brandSystem = `You are a brand name matching assistant for a bicycle parts distributor catalog.
+You are precise and return only valid JSON.`;
+
+    const brandUser = `I need to identify which brands in our content report belong to the same brand families as the products in a new SKU upload.
+
+Sample product descriptions from the new SKU upload (first 25):
+${sampleDescs.map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+All unique brand names in the content report (${allCatalogBrands.length} total):
+${allCatalogBrands.join('\n')}
+
+Instructions:
+- Identify what brand(s) the new SKU upload belongs to based on the product descriptions
+- Find ALL matching brand names in the content report, considering: abbreviations (FSA = Full Speed Ahead), parent/sub-brands (Vision is a brand under FSA), spelling variations, alternate names, and partial matches
+- When in doubt, include rather than exclude
+- Return ONLY valid JSON, no other text
+
+Return this exact JSON structure:
+{
+  "identified_upload_brands": ["brand names you identified from the descriptions"],
+  "matching_catalog_brands": ["exact brand names from the content report list that match"]
+}`;
+
+    const brandResult = await claudeCall(apiKey, brandSystem, brandUser, 1024);
+    const brandData = extractJson(brandResult);
+
+    matchedBrands = brandData.matching_catalog_brands || [];
+    if (matchedBrands.length === 0) {
+      throw new Error('No matching brands found in the content report. Check that the content report contains the right vendor data.');
+    }
+
+    // Filter catalog to matched brands only, slim to needed columns
+    filteredCatalog = catalogRows.filter(r =>
+      matchedBrands.includes(String(r[catCols.brand] || '').trim())
+    );
+
+    setStep(1, 'done', `Matched ${matchedBrands.length} brand family — ${filteredCatalog.length.toLocaleString()} catalog SKUs identified`);
+
+    // Show confirmation panel
+    const chips = document.getElementById('confirmChips');
+    chips.innerHTML = '';
+    (brandData.identified_upload_brands || []).forEach(b => {
+      chips.innerHTML += `<span class="chip">${b}</span>`;
+    });
+    chips.innerHTML += '<span style="font-family:var(--font-mono);font-size:11px;color:#999;align-self:center;">→ matched to →</span>';
+    matchedBrands.forEach(b => {
+      chips.innerHTML += `<span class="chip highlight">${b}</span>`;
+    });
+    document.getElementById('confirmNote').textContent =
+      `Found ${filteredCatalog.length.toLocaleString()} existing catalog SKUs across ${matchedBrands.length} brand name${matchedBrands.length > 1 ? 's' : ''}. Claude will compare your ${skuRows.length} new SKUs against these. Does this look right?`;
+
+    document.getElementById('confirmPanel').classList.remove('hidden');
+
+  } catch (err) {
+    setStep(1, 'error', err.message);
+    showError('Brand matching failed: ' + err.message);
+    document.getElementById('setupPanel').classList.remove('hidden');
+  }
+}
+
+async function proceedWithAnalysis() {
+  document.getElementById('confirmPanel').classList.add('hidden');
+  const apiKey = document.getElementById('apiKey').value.trim();
+  setStep(2, 'running', `Analyzing ${skuRows.length} SKUs against ${filteredCatalog.length.toLocaleString()} catalog entries…`);
+
+  try {
+    // Format new SKUs
+    const newSkuLines = skuRows.map(r => {
+      const matId = String(r[skuCols.matId] || '').trim();
+      const desc  = String(r[skuCols.desc]  || '').trim();
+      const vpn   = skuCols.vendor !== -1 ? String(r[skuCols.vendor] || '').trim() : '';
+      const brand = skuCols.brand  !== -1 ? String(r[skuCols.brand]  || '').trim() : '';
+      return `${matId}|${desc}|${vpn}|${brand}`;
+    }).join('\n');
+
+    // Format filtered catalog (slim to 4 key columns, pipe-delimited)
+    const catalogLines = filteredCatalog.map(r => {
+      const matId  = String(r[catCols.matId]  || '').trim();
+      const desc   = String(r[catCols.desc]   || '').trim();
+      const model  = catCols.model  !== -1 ? String(r[catCols.model]  || '').trim() : '';
+      const modelD = catCols.modelD !== -1 ? String(r[catCols.modelD] || '').trim() : '';
+      return `${matId}|${desc}|${model}|${modelD}`;
+    }).join('\n');
+
+    const analysisSystem = `You are a product catalog modeling expert for QBP (Quality Bicycle Products), a bicycle parts distributor. Your job is to analyze new incoming SKUs and recommend how each one should be set up in the PIM (product information management system).
+
+You will receive:
+1. NEW SKUs being added — format: MaterialID|ShortDescription|VendorPartNum|Brand
+2. EXISTING catalog SKUs for the same brand(s) — format: MaterialID|ShortDescription|ModelCode|ModelDescription
+
+For each new SKU, recommend exactly one of:
+
+ADD VARIANT — The SKU belongs under an existing model as a new size, color, spec, or configuration. Identify the exact existing model code and description.
+
+NEW MODEL — GROUPED — The SKU is a new product that belongs in the same new model as other SKUs in this batch (size runs, color options, compatible accessories in a system). List all other new-batch Material IDs it should group with.
+
+NEW MODEL — STANDALONE — The SKU is a genuinely unique product with no natural siblings in the existing catalog or this batch.
+
+Key rules:
+- SKUs differing only by size (length, arm length, wheel size), color, or drivetrain spec (HG vs XDR, Shimano vs SRAM) are variants of the same model.
+- Service/replacement parts for a specific product system should join a related accessories model if one exists, or standalone if not.
+- Lean toward ADD VARIANT when a close existing model exists.
+- For NEW MODEL — GROUPED, list ALL sibling Material IDs from the new SKU batch.
+
+Return ONLY a JSON array, no other text. Each object must have exactly these keys:
+{
+  "material_id": "...",
+  "recommendation": "ADD VARIANT" or "NEW MODEL — GROUPED" or "NEW MODEL — STANDALONE",
+  "target_model_code": "existing code, or (new) if new model",
+  "target_model_description": "...",
+  "group_with": "comma-separated Material IDs of siblings in this batch, or empty string",
+  "notes": "1-2 sentence rationale"
+}`;
+
+    const analysisUser = `NEW SKUs to model (${skuRows.length} total)
+Format: MaterialID|ShortDescription|VendorPartNum|Brand
+---
+${newSkuLines}
+
+EXISTING CATALOG SKUs for these brand families (${filteredCatalog.length} total)
+Format: MaterialID|ShortDescription|ModelCode|ModelDescription
+---
+${catalogLines}`;
+
+    const analysisResult = await claudeCall(apiKey, analysisSystem, analysisUser, 8192);
+    analysisResults = extractJson(analysisResult);
+
+    if (!Array.isArray(analysisResults) || analysisResults.length === 0) {
+      throw new Error('Analysis returned no results. Try again or check the API response.');
+    }
+
+    setStep(2, 'done', `${analysisResults.length} SKUs analyzed`);
+    renderResults();
+
+  } catch (err) {
+    setStep(2, 'error', err.message);
+    showError('Analysis failed: ' + err.message);
+  }
+}
+
+function cancelRun() {
+  document.getElementById('confirmPanel').classList.add('hidden');
+  document.getElementById('progressPanel').classList.add('hidden');
+  document.getElementById('setupPanel').classList.remove('hidden');
+}
+
+// ── RESULTS RENDERING ──────────────────────────────────────────────────────
+function recClass(rec) {
+  if (rec.includes('GROUPED')) return 'grouped';
+  if (rec.includes('STANDALONE')) return 'standalone';
+  return 'variant';
+}
+
+function renderResults() {
+  const variantCount  = analysisResults.filter(r => r.recommendation === 'ADD VARIANT').length;
+  const groupedCount  = analysisResults.filter(r => r.recommendation === 'NEW MODEL — GROUPED').length;
+  const standaloneCount = analysisResults.filter(r => r.recommendation === 'NEW MODEL — STANDALONE').length;
+
+  const summary = document.getElementById('resultsSummary');
+  summary.innerHTML = `
+    <span class="rec-badge variant">${variantCount} Add Variant</span>
+    <span class="rec-badge grouped">${groupedCount} New Grouped</span>
+    <span class="rec-badge standalone">${standaloneCount} Standalone</span>
+  `;
+
+  // Build a lookup for short descriptions from the uploaded SKU file
+  const descLookup = {};
+  skuRows.forEach(r => {
+    const id = String(r[skuCols.matId] || '').trim();
+    if (id) descLookup[id] = String(r[skuCols.desc] || '').trim();
+  });
+
+  const tbody = document.getElementById('resultsBody');
+  tbody.innerHTML = '';
+  analysisResults.forEach(r => {
+    const cls = recClass(r.recommendation);
+    const desc = descLookup[r.material_id] || '';
+    const tr = document.createElement('tr');
+    tr.className = 'row-' + cls;
+    tr.innerHTML = `
+      <td class="mat-id">${esc(r.material_id)}</td>
+      <td class="description">${esc(desc)}</td>
+      <td><span class="rec-pill ${cls}">${esc(r.recommendation)}</span></td>
+      <td class="model">${esc(r.target_model_code || '')}</td>
+      <td class="model">${esc(r.target_model_description || '')}</td>
+      <td class="group">${esc(r.group_with || '')}</td>
+      <td class="notes">${esc(r.notes || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('resultsPanel').classList.remove('hidden');
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── EXCEL EXPORT ──────────────────────────────────────────────────────────
+function downloadExcel() {
+  const descLookup = {};
+  skuRows.forEach(r => {
+    const id = String(r[skuCols.matId] || '').trim();
+    if (id) descLookup[id] = String(r[skuCols.desc] || '').trim();
+  });
+
+  const headers = ['Material ID','Short Description','Recommendation','Target Model Code','Target Model Description','Group With','Notes'];
+  const rows = analysisResults.map(r => [
+    r.material_id,
+    descLookup[r.material_id] || '',
+    r.recommendation,
+    r.target_model_code || '',
+    r.target_model_description || '',
+    r.group_with || '',
+    r.notes || ''
+  ]);
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 14 }, { wch: 45 }, { wch: 28 }, { wch: 16 }, { wch: 36 }, { wch: 30 }, { wch: 55 }
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Model Recommendations');
+
+  // Legend sheet
+  const legendData = [
+    ['Color', 'Recommendation', 'Description'],
+    ['Green', 'ADD VARIANT', 'SKU belongs under an existing model as a new size, color, or spec variant.'],
+    ['Yellow', 'NEW MODEL — GROUPED', 'SKU is a new product that should be grouped with other new SKUs into a new model.'],
+    ['Blue', 'NEW MODEL — STANDALONE', 'SKU is a unique product that should be set up as its own new standalone model.']
+  ];
+  const wsLegend = XLSX.utils.aoa_to_sheet(legendData);
+  wsLegend['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 70 }];
+  XLSX.utils.book_append_sheet(wb, wsLegend, 'Legend');
+
+  const date = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `Model_Recommendations_${date}.xlsx`);
+}
+
+// ── RESET ──────────────────────────────────────────────────────────────────
+function resetTool() {
+  skuRows = []; catalogRows = []; matchedBrands = []; filteredCatalog = []; analysisResults = [];
+  ['zone1','zone2'].forEach(id => {
+    document.getElementById(id).classList.remove('loaded','drag-over');
+  });
+  ['zone1Info','zone2Info'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+    document.getElementById(id).textContent = '';
+  });
+  ['progressPanel','confirmPanel','resultsPanel','errorBanner'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+  document.getElementById('setupPanel').classList.remove('hidden');
+  document.getElementById('runBtn').disabled = true;
+  setStep(1, 'pending', 'Waiting to start…');
+  setStep(2, 'pending', 'Waiting for brand match…');
+  document.getElementById('resultsBody').innerHTML = '';
+}
+</script>
+</body>
+</html>
