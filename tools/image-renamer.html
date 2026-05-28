@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vendor Image Renamer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --paper: #f5f2ec;
+    --paper-warm: #ede9df;
+    --rule: #c8bfa8;
+    --rule-light: #e0d9cc;
+    --accent: #b84c1e;
+    --accent-muted: #e8d5cc;
+    --font-body: 'Libre Baskerville', Georgia, serif;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+    --green-bg: #d6edda; --green-border: #4a9458; --green-text: #1a4d24;
+    --yellow-bg: #fef3d0; --yellow-border: #c9a227; --yellow-text: #5a3d00;
+    --red-bg: #fde8e8; --red-border: #c0392b; --red-text: #7a1515;
+    --blue-bg: #ddeaf8; --blue-border: #3a65b0; --blue-text: #1a2e6e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-body); background: var(--paper); color: var(--ink); min-height: 100vh; }
+
+  header {
+    background: var(--ink); color: var(--paper);
+    padding: 18px 32px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+    border-bottom: 3px solid var(--accent);
+  }
+  header h1 { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 500; }
+  header .subtitle { font-family: var(--font-mono); font-size: 11px; color: #888; letter-spacing: 0.08em; }
+
+  .btn {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 7px 14px; border: 1px solid currentColor;
+    cursor: pointer; transition: all 0.15s; background: transparent; display: inline-block; text-decoration: none;
+  }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-ghost { color: #aaa; border-color: #444; }
+  .btn-ghost:hover:not(:disabled) { color: var(--paper); border-color: var(--paper); }
+  .btn-primary { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  .btn-primary:hover:not(:disabled) { background: #333; }
+  .btn-accent { color: var(--paper); background: var(--accent); border-color: var(--accent); }
+  .btn-accent:hover:not(:disabled) { background: #9a3d18; }
+
+  main { max-width: 980px; margin: 0 auto; padding: 40px 32px 80px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: #999; margin-bottom: 10px; }
+  h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+  .description { font-size: 14px; line-height: 1.7; color: #555; max-width: 640px; margin-bottom: 32px; }
+  .panel-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #999; margin-bottom: 8px; }
+  .divider { border: none; border-top: 1px solid var(--rule-light); margin: 32px 0; }
+
+  /* ── DROPBOX HELP ── */
+  .help-box { border: 1px solid var(--rule); background: var(--paper-warm); margin-bottom: 28px; }
+  .help-toggle {
+    width: 100%; background: none; border: none; cursor: pointer; padding: 14px 18px;
+    display: flex; align-items: center; justify-content: space-between; text-align: left;
+  }
+  .help-toggle-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #666; }
+  .help-toggle-arrow { font-family: var(--font-mono); font-size: 11px; color: #aaa; transition: transform 0.2s; }
+  .help-toggle-arrow.open { transform: rotate(90deg); }
+  .help-content { padding: 0 18px 18px; display: none; }
+  .help-content.open { display: block; }
+  .help-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
+  .help-step-group h4 { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule-light); }
+  .help-step { display: flex; gap: 10px; margin-bottom: 10px; font-size: 13px; line-height: 1.6; color: #555; }
+  .help-step-num { font-family: var(--font-mono); font-size: 11px; background: var(--ink); color: var(--paper); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+  .help-note { font-size: 12px; color: #777; background: white; border: 1px solid var(--rule-light); padding: 10px 14px; line-height: 1.6; }
+  .help-note code { font-family: var(--font-mono); font-size: 11px; background: var(--paper-warm); padding: 1px 5px; color: var(--accent); }
+
+  /* ── UPLOAD ZONES ── */
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .upload-zone {
+    border: 2px dashed var(--rule); background: var(--paper-warm);
+    padding: 28px 24px; text-align: center; cursor: pointer;
+    transition: all 0.2s; position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: var(--accent-muted); }
+  .upload-zone.loaded { border-style: solid; border-color: var(--green-border); background: var(--green-bg); }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .zone-icon { font-size: 28px; margin-bottom: 10px; }
+  .zone-title { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; margin-bottom: 6px; }
+  .zone-hint { font-size: 12px; color: #777; line-height: 1.6; }
+  .zone-hint code { font-family: var(--font-mono); font-size: 11px; background: rgba(0,0,0,0.06); padding: 1px 5px; }
+  .zone-info { font-family: var(--font-mono); font-size: 11px; color: var(--green-text); font-weight: 500; margin-top: 8px; display: none; }
+
+  .run-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .match-note { font-size: 12px; color: #777; font-style: italic; }
+
+  /* ── PROGRESS ── */
+  .progress-bar-wrap { background: var(--paper-warm); border: 1px solid var(--rule); padding: 20px 24px; margin-bottom: 20px; }
+  .progress-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: #555; margin-bottom: 10px; }
+  .progress-bar-bg { background: var(--rule-light); height: 6px; border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.3s; border-radius: 3px; }
+  .progress-status { font-family: var(--font-mono); font-size: 10px; color: #999; margin-top: 6px; }
+
+  /* ── RESULTS SUMMARY ── */
+  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .summary-card { background: var(--paper-warm); border: 1px solid var(--rule); padding: 14px 16px; }
+  .summary-card .num { font-family: var(--font-mono); font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+  .summary-card .lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #999; }
+  .summary-card.green { border-color: var(--green-border); background: var(--green-bg); }
+  .summary-card.green .num { color: var(--green-text); }
+  .summary-card.yellow { border-color: var(--yellow-border); background: var(--yellow-bg); }
+  .summary-card.yellow .num { color: var(--yellow-text); }
+  .summary-card.red { border-color: var(--red-border); background: var(--red-bg); }
+  .summary-card.red .num { color: var(--red-text); }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead th {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 10px 12px; text-align: left;
+    background: var(--ink); color: var(--paper); white-space: nowrap; font-weight: 500;
+  }
+  tbody tr { border-bottom: 1px solid var(--rule-light); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 9px 12px; vertical-align: middle; }
+  td.filename { font-family: var(--font-mono); font-size: 10px; color: #555; max-width: 200px; word-break: break-all; }
+  td.newname { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+  td.desc { font-size: 11px; max-width: 200px; }
+  td.conf { white-space: nowrap; }
+
+  .conf-pill { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border: 1px solid; font-weight: 500; }
+  .conf-high { background: var(--green-bg); border-color: var(--green-border); color: var(--green-text); }
+  .conf-med { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow-text); }
+  .conf-review { background: var(--red-bg); border-color: var(--red-border); color: var(--red-text); }
+  .conf-none { background: #f0f0f0; border-color: #ccc; color: #888; }
+
+  tr.row-high { background: #f8fbf8; }
+  tr.row-med { background: #fdfbf4; }
+  tr.row-review { background: #fdf8f8; }
+  tr.row-none { background: #f8f8f8; opacity: 0.7; }
+
+  .tab-row { display: flex; gap: 0; margin-bottom: -1px; }
+  .tab {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 8px 16px; border: 1px solid var(--rule); border-bottom: none; cursor: pointer;
+    background: var(--paper-warm); color: #777; transition: all 0.15s;
+  }
+  .tab.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .actions-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+  .error-banner { background: var(--red-bg); border: 1px solid var(--red-border); border-left: 4px solid var(--red-border); padding: 12px 16px; font-size: 13px; color: var(--red-text); margin-bottom: 16px; display: none; }
+  .hidden { display: none !important; }
+
+  .img-thumb { width: 36px; height: 36px; object-fit: cover; border: 1px solid var(--rule); background: white; }
+  .no-thumb { width: 36px; height: 36px; background: var(--paper-warm); border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+  /* editable mat-id override */
+  .mat-override {
+    font-family: var(--font-mono); font-size: 11px; padding: 3px 6px;
+    border: 1px solid var(--rule); background: white; width: 90px;
+    outline: none; color: var(--ink);
+  }
+  .mat-override:focus { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Vendor Image Renamer</h1>
+    <div class="subtitle">Match & rename vendor images to QBP SKU numbers</div>
+  </div>
+  <a class="btn btn-ghost" href="../index.html">← All Tools</a>
+</header>
+
+<main>
+  <div class="eyebrow">QBP Content Tools</div>
+  <h2>Vendor Image Renamer</h2>
+  <p class="description">
+    Upload a SKU list and a folder of vendor images. The tool matches each image to a QBP
+    Material ID using the vendor part number or product name in the filename, then packages
+    everything as a renamed ZIP ready to hand off.
+  </p>
+
+  <div id="errorBanner" class="error-banner"></div>
+
+  <!-- ── DROPBOX HELP ── -->
+  <div class="help-box">
+    <button class="help-toggle" onclick="toggleHelp()">
+      <span class="help-toggle-label">📁 How to get your Dropbox images onto your computer</span>
+      <span class="help-toggle-arrow" id="helpArrow">▶</span>
+    </button>
+    <div class="help-content" id="helpContent">
+      <div class="help-steps">
+        <div class="help-step-group">
+          <h4>Option A — Shared folder link (most common)</h4>
+          <div class="help-step"><div class="help-step-num">1</div><div>Open the Dropbox link the vendor sent you in your browser.</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div>Click <strong>"Add to my Dropbox"</strong> (top right). This saves it to your own Dropbox account.</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div>Open the <strong>Dropbox desktop app</strong> on your computer and wait for the folder to finish syncing. You'll see a checkmark when it's done.</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div>Your images will be in your <strong>Dropbox folder</strong> on your computer — usually <code>Documents → Dropbox</code> or in your user folder.</div></div>
+        </div>
+        <div class="help-step-group">
+          <h4>Option B — View-only / download link</h4>
+          <div class="help-step"><div class="help-step-num">1</div><div>Open the Dropbox link in your browser.</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div>Click <strong>"Download"</strong> to download the whole folder as a ZIP file.</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div>Find the ZIP in your <strong>Downloads folder</strong> and double-click it to unzip. This creates a regular folder of images.</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div>Use that unzipped folder in the tool below.</div></div>
+        </div>
+      </div>
+      <div class="help-note">
+        <strong>Then:</strong> In the Image Folder box below, click <strong>"Select Folder"</strong> and navigate to the synced or unzipped folder. The tool reads the filenames — it does not upload your images to the internet. Everything stays on your computer.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SETUP ── -->
+  <div id="setupPanel">
+    <div class="panel-label">Upload Files</div>
+    <div class="upload-grid">
+
+      <div>
+        <div class="panel-label" style="margin-bottom:6px;">SKU List</div>
+        <div class="upload-zone" id="zone1"
+          ondragover="handleDrag(event,'zone1',true)"
+          ondragleave="handleDrag(event,'zone1',false)"
+          ondrop="handleDrop(event,'sku')">
+          <input type="file" accept=".xlsx,.xls,.csv" onchange="handleFileInput(event,'sku')">
+          <div class="zone-icon">📋</div>
+          <div class="zone-title">SKU List</div>
+          <div class="zone-hint">
+            Drop your .xlsx here or click to browse.<br>
+            Needs: <code>Material ID</code>, <code>Vendor Part #</code>,<br>
+            <code>Short Description</code>
+          </div>
+          <div class="zone-info" id="zone1Info"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label" style="margin-bottom:6px;">Image Folder</div>
+        <div class="upload-zone" id="zone2"
+          ondragover="handleDrag(event,'zone2',true)"
+          ondragleave="handleDrag(event,'zone2',false)"
+          ondrop="handleDrop(event,'img')">
+          <input type="file" id="folderInput" webkitdirectory multiple accept="image/*"
+            onchange="handleFileInput(event,'img')">
+          <div class="zone-icon">🖼️</div>
+          <div class="zone-title">Image Folder</div>
+          <div class="zone-hint">
+            Click "Select Folder" to choose your synced<br>
+            or downloaded vendor image folder.<br>
+            <code>.jpg .png .tiff .webp</code> supported
+          </div>
+          <div class="zone-info" id="zone2Info"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="run-row">
+      <button class="btn btn-primary" id="runBtn" onclick="runMatching()" disabled>
+        Match Images →
+      </button>
+      <span class="match-note">No internet connection needed. All matching runs locally in your browser.</span>
+    </div>
+  </div>
+
+  <!-- ── PROGRESS ── -->
+  <div id="progressPanel" class="hidden">
+    <div class="progress-bar-wrap">
+      <div class="progress-label" id="progressLabel">Matching images to SKUs…</div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-status" id="progressStatus">Starting…</div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div id="resultsPanel" class="hidden">
+    <hr class="divider">
+
+    <div class="summary-grid">
+      <div class="summary-card green">
+        <div class="num" id="countHigh">0</div>
+        <div class="lbl">High confidence</div>
+      </div>
+      <div class="summary-card yellow">
+        <div class="num" id="countMed">0</div>
+        <div class="lbl">Medium confidence</div>
+      </div>
+      <div class="summary-card red">
+        <div class="num" id="countReview">0</div>
+        <div class="lbl">Needs review</div>
+      </div>
+      <div class="summary-card">
+        <div class="num" id="countNone">0</div>
+        <div class="lbl">No match found</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-row">
+      <div class="tab active" id="tab-all" onclick="switchTab('all')">All Images</div>
+      <div class="tab" id="tab-review" onclick="switchTab('review')">Needs Review</div>
+      <div class="tab" id="tab-none" onclick="switchTab('none')">No Match</div>
+    </div>
+
+    <div class="tab-content active" id="content-all">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Original Filename</th>
+              <th>New Filename (QBP SKU)</th>
+              <th>Matched Description</th>
+              <th>Match Type</th>
+              <th>Confidence</th>
+              <th>Override SKU</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-all"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="content-review">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Original Filename</th>
+              <th>Suggested New Name</th>
+              <th>Matched Description</th>
+              <th>Confidence Score</th>
+              <th>Override SKU</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-review"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-content" id="content-none">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Original Filename</th>
+              <th>Closest Guess</th>
+              <th>Notes</th>
+              <th>Manually Assign SKU</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-none"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions-row">
+      <button class="btn btn-accent" onclick="downloadZip()">Download Renamed ZIP</button>
+      <button class="btn btn-ghost" onclick="resetTool()">Start Over</button>
+      <span class="match-note" id="zipNote"></span>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let skuList = [];   // [{matId, vendorPart, desc}]
+let imgFiles = [];  // File objects
+let results = [];   // [{file, originalName, matId, newName, desc, matchType, confidence, score}]
+
+// ── HELPERS ──────────────────────────────────────────────────────────────
+function norm(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function tokenScore(a, b) {
+  const ta = new Set(norm(a).split(' ').filter(t => t.length > 1));
+  const tb = new Set(norm(b).split(' ').filter(t => t.length > 1));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let hits = 0;
+  ta.forEach(t => { if (tb.has(t)) hits++; });
+  return hits / Math.max(ta.size, tb.size);
+}
+
+function ext(filename) {
+  const m = filename.match(/(\.[^.]+)$/);
+  return m ? m[1].toLowerCase() : '';
+}
+function stripExt(filename) { return filename.replace(/\.[^.]+$/, ''); }
+
+// ── FILE PARSING ─────────────────────────────────────────────────────────
+function findCol(headers, candidates) {
+  const lower = headers.map(h => String(h || '').toLowerCase().trim());
+  for (const c of candidates) {
+    const i = lower.findIndex(h => h.includes(c.toLowerCase()));
+    if (i !== -1) return i;
+  }
+  return -1;
+}
+
+function parseSkuFile(data) {
+  if (data.length < 2) return showError('SKU file appears empty.');
+  const headers = data[0].map(h => String(h || ''));
+  const matIdx    = findCol(headers, ['material id','mat id','materialid']);
+  const vendorIdx = findCol(headers, ['vendor part','part #','part#','vpn','vendor_part']);
+  const descIdx   = findCol(headers, ['short description','short desc','description','desc']);
+  if (matIdx === -1) return showError('SKU file needs a "Material ID" column.');
+  if (descIdx === -1) return showError('SKU file needs a "Short Description" column.');
+
+  skuList = data.slice(1)
+    .filter(r => r[matIdx])
+    .map(r => ({
+      matId:      String(r[matIdx]      || '').trim(),
+      vendorPart: vendorIdx !== -1 ? String(r[vendorIdx] || '').trim() : '',
+      desc:       String(r[descIdx]     || '').trim()
+    }))
+    .filter(s => s.matId);
+
+  markZoneLoaded('zone1', 'zone1Info', `${skuList.length} SKUs loaded`);
+  checkReady();
+}
+
+function handleSkuUpload(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    parseSkuFile(XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── DROP / INPUT HANDLERS ────────────────────────────────────────────────
+function handleDrag(e, id, over) {
+  e.preventDefault();
+  document.getElementById(id).classList.toggle('drag-over', over);
+}
+function handleDrop(e, type) {
+  e.preventDefault();
+  const id = type === 'sku' ? 'zone1' : 'zone2';
+  document.getElementById(id).classList.remove('drag-over');
+  if (type === 'sku' && e.dataTransfer.files[0]) handleSkuUpload(e.dataTransfer.files[0]);
+  if (type === 'img' && e.dataTransfer.files.length) handleImgFiles(e.dataTransfer.files);
+}
+function handleFileInput(e, type) {
+  if (type === 'sku' && e.target.files[0]) handleSkuUpload(e.target.files[0]);
+  if (type === 'img' && e.target.files.length) handleImgFiles(e.target.files);
+}
+function handleImgFiles(fileList) {
+  imgFiles = Array.from(fileList).filter(f => /\.(jpe?g|png|tiff?|webp|gif|bmp)$/i.test(f.name));
+  if (imgFiles.length === 0) return showError('No image files found in that folder. Supported formats: JPG, PNG, TIFF, WebP.');
+  markZoneLoaded('zone2', 'zone2Info', `${imgFiles.length} image${imgFiles.length !== 1 ? 's' : ''} loaded`);
+  checkReady();
+}
+
+function markZoneLoaded(zoneId, infoId, msg) {
+  document.getElementById(zoneId).classList.add('loaded');
+  const el = document.getElementById(infoId);
+  el.textContent = '✓ ' + msg;
+  el.style.display = 'block';
+}
+function checkReady() {
+  document.getElementById('runBtn').disabled = !(skuList.length > 0 && imgFiles.length > 0);
+}
+
+// ── MATCHING ──────────────────────────────────────────────────────────────
+function matchImage(file) {
+  const base = stripExt(file.name);
+  const normBase = norm(base);
+  const extension = ext(file.name);
+
+  // Build a clean vendor-part-number string for comparison
+  const cleanBase = base.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+  // Pass 1: exact vendor part # match
+  for (const sku of skuList) {
+    if (!sku.vendorPart) continue;
+    const cleanVpn = sku.vendorPart.replace(/[^a-z0-9]/gi, '').toLowerCase();
+    if (cleanVpn && cleanBase === cleanVpn) {
+      return { matId: sku.matId, desc: sku.desc, matchType: 'Vendor Part #', confidence: 'HIGH', score: 1.0, extension };
+    }
+    // also try: filename contains the vendor part # surrounded by non-alphanumeric
+    if (cleanVpn && cleanBase.includes(cleanVpn)) {
+      return { matId: sku.matId, desc: sku.desc, matchType: 'Vendor Part # (partial)', confidence: 'HIGH', score: 0.95, extension };
+    }
+  }
+
+  // Pass 2: token overlap on description
+  let best = null;
+  let bestScore = 0;
+  for (const sku of skuList) {
+    const score = tokenScore(normBase, sku.desc);
+    if (score > bestScore) { bestScore = score; best = sku; }
+  }
+
+  if (best && bestScore >= 0.65) {
+    return { matId: best.matId, desc: best.desc, matchType: 'Product Name', confidence: 'MEDIUM', score: bestScore, extension };
+  }
+  if (best && bestScore >= 0.35) {
+    return { matId: best.matId, desc: best.desc, matchType: 'Partial Name', confidence: 'REVIEW', score: bestScore, extension };
+  }
+
+  // No match
+  const guess = best && bestScore > 0.15 ? best : null;
+  return {
+    matId: null, desc: guess ? guess.desc : '', matchType: 'No Match',
+    confidence: 'NONE', score: bestScore, extension,
+    guessMatId: guess ? guess.matId : ''
+  };
+}
+
+async function runMatching() {
+  hideError();
+  document.getElementById('setupPanel').classList.add('hidden');
+  document.getElementById('progressPanel').classList.remove('hidden');
+  results = [];
+
+  const total = imgFiles.length;
+  for (let i = 0; i < total; i++) {
+    const f = imgFiles[i];
+    const match = matchImage(f);
+
+    match.newName = ''; // assigned in post-process below
+    results.push({ file: f, originalName: f.name, ...match });
+
+    // Update progress
+    const pct = Math.round(((i + 1) / total) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressStatus').textContent = `${i + 1} of ${total} — ${f.name}`;
+    if (i % 10 === 0) await new Promise(r => setTimeout(r, 0)); // yield to UI
+  }
+
+  // Post-process: assign final filenames using correct naming convention
+  // Single image for a SKU: QBP-SKU.ext
+  // Multiple images for same SKU: QBP-SKU-01.ext, QBP-SKU-02.ext, etc.
+  const grouped = {};
+  results.forEach(r => {
+    if (r.matId) {
+      if (!grouped[r.matId]) grouped[r.matId] = [];
+      grouped[r.matId].push(r);
+    }
+  });
+  Object.entries(grouped).forEach(([matId, items]) => {
+    if (items.length === 1) {
+      items[0].newName = matId + items[0].extension;
+    } else {
+      items.forEach((item, idx) => {
+        item.newName = matId + '-' + String(idx + 1).padStart(2, '0') + item.extension;
+      });
+    }
+  });
+
+  document.getElementById('progressPanel').classList.add('hidden');
+  renderResults();
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function renderThumb(file) {
+  return `<div class="no-thumb" id="thumb-${CSS.escape(file.name)}">🖼</div>`;
+}
+
+function confPill(c) {
+  const map = { HIGH: 'conf-high', MEDIUM: 'conf-med', REVIEW: 'conf-review', NONE: 'conf-none' };
+  return `<span class="conf-pill ${map[c] || 'conf-none'}">${c}</span>`;
+}
+
+function overrideInput(originalName, currentMatId) {
+  const safe = originalName.replace(/"/g, '&quot;');
+  return `<input class="mat-override" type="text" value="${currentMatId || ''}"
+    placeholder="e.g. AB1234"
+    onchange="applyOverride('${safe}', this.value)"
+    title="Type a Material ID to manually assign this image">`;
+}
+
+function renderRows(tbody, items, mode) {
+  tbody.innerHTML = '';
+  if (items.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px;text-align:center;font-family:var(--font-mono);font-size:11px;color:#aaa;">No items in this category</td></tr>`;
+    return;
+  }
+  items.forEach(r => {
+    const rowClass = { HIGH: 'row-high', MEDIUM: 'row-med', REVIEW: 'row-review', NONE: 'row-none' }[r.confidence] || '';
+    const pct = r.score > 0 ? `${Math.round(r.score * 100)}%` : '—';
+    const scoreDisplay = r.confidence === 'HIGH' && r.matchType.includes('Vendor Part') ? '100% (exact)' : pct;
+
+    if (mode === 'none') {
+      tbody.innerHTML += `<tr class="${rowClass}">
+        <td>${renderThumb(r.file)}</td>
+        <td class="filename">${esc(r.originalName)}</td>
+        <td class="desc">${r.guessMatId ? `<span style="font-family:var(--font-mono);font-size:10px;">${esc(r.guessMatId)}</span><br><span style="color:#999;font-size:11px;">${esc(r.desc)}</span>` : '<span style="color:#aaa;font-size:11px;">—</span>'}</td>
+        <td style="font-size:11px;color:#888;">Score: ${scoreDisplay}</td>
+        <td>${overrideInput(r.originalName, r.guessMatId)}</td>
+      </tr>`;
+    } else {
+      tbody.innerHTML += `<tr class="${rowClass}">
+        <td>${renderThumb(r.file)}</td>
+        <td class="filename">${esc(r.originalName)}</td>
+        <td class="newname">${r.newName ? esc(r.newName) : '<span style="color:#aaa;">—</span>'}</td>
+        <td class="desc">${esc(r.desc)}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:#888;">${esc(r.matchType)}</td>
+        <td class="conf">${confPill(r.confidence)}</td>
+        <td>${overrideInput(r.originalName, r.matId)}</td>
+      </tr>`;
+    }
+  });
+
+  // Lazy-load thumbnails
+  items.forEach(r => {
+    const el = document.getElementById('thumb-' + CSS.escape(r.file.name));
+    if (!el) return;
+    const url = URL.createObjectURL(r.file);
+    const img = document.createElement('img');
+    img.className = 'img-thumb';
+    img.src = url;
+    img.onload = () => { el.replaceWith(img); };
+  });
+}
+
+function renderResults() {
+  const high     = results.filter(r => r.confidence === 'HIGH');
+  const med      = results.filter(r => r.confidence === 'MEDIUM');
+  const review   = results.filter(r => r.confidence === 'REVIEW');
+  const none     = results.filter(r => r.confidence === 'NONE');
+  const matched  = results.filter(r => r.matId);
+
+  document.getElementById('countHigh').textContent   = high.length;
+  document.getElementById('countMed').textContent    = med.length;
+  document.getElementById('countReview').textContent = review.length;
+  document.getElementById('countNone').textContent   = none.length;
+
+  renderRows(document.getElementById('tbody-all'),    results, 'all');
+  renderRows(document.getElementById('tbody-review'), [...review], 'review');
+  renderRows(document.getElementById('tbody-none'),   none, 'none');
+
+  document.getElementById('zipNote').textContent =
+    `${matched.length} of ${results.length} images will be renamed. Unmatched images included in a separate folder.`;
+
+  document.getElementById('resultsPanel').classList.remove('hidden');
+}
+
+// ── OVERRIDE ──────────────────────────────────────────────────────────────
+function applyOverride(originalName, newMatId) {
+  const r = results.find(x => x.originalName === originalName);
+  if (!r) return;
+  newMatId = newMatId.trim().toUpperCase();
+  if (!newMatId) { r.matId = null; r.newName = ''; r.confidence = 'NONE'; }
+  else {
+    r.matId = newMatId;
+    r.matchType = 'Manual Override';
+    r.confidence = 'HIGH';
+    // Re-run post-process naming for all results so suffixes stay consistent
+    const grouped = {};
+    results.forEach(x => {
+      if (x.matId) {
+        if (!grouped[x.matId]) grouped[x.matId] = [];
+        grouped[x.matId].push(x);
+      }
+    });
+    Object.entries(grouped).forEach(([matId, items]) => {
+      if (items.length === 1) {
+        items[0].newName = matId + items[0].extension;
+      } else {
+        items.forEach((item, idx) => {
+          item.newName = matId + '-' + String(idx + 1).padStart(2, '0') + item.extension;
+        });
+      }
+    });
+  }
+  renderResults();
+}
+
+// ── ZIP DOWNLOAD ──────────────────────────────────────────────────────────
+async function downloadZip() {
+  const zip = new JSZip();
+  const matched   = zip.folder('renamed');
+  const unmatched = zip.folder('unmatched');
+
+  const btn = document.querySelector('[onclick="downloadZip()"]');
+  btn.disabled = true;
+  btn.textContent = 'Building ZIP…';
+
+  for (const r of results) {
+    const arrayBuf = await r.file.arrayBuffer();
+    if (r.matId && r.newName) {
+      matched.file(r.newName, arrayBuf);
+    } else {
+      unmatched.file(r.originalName, arrayBuf);
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const date = new Date().toISOString().slice(0, 10);
+  a.download = `QBP_Images_Renamed_${date}.zip`;
+  a.click();
+
+  btn.disabled = false;
+  btn.textContent = 'Download Renamed ZIP';
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  ['all','review','none'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('content-' + t).classList.toggle('active', t === name);
+  });
+}
+
+// ── RESET / UTILS ─────────────────────────────────────────────────────────
+function resetTool() {
+  skuList = []; imgFiles = []; results = [];
+  ['zone1','zone2'].forEach(id => document.getElementById(id).classList.remove('loaded','drag-over'));
+  ['zone1Info','zone2Info'].forEach(id => { const el = document.getElementById(id); el.textContent = ''; el.style.display = 'none'; });
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('progressFill').style.width = '0%';
+  ['progressPanel','resultsPanel'].forEach(id => document.getElementById(id).classList.add('hidden'));
+  document.getElementById('setupPanel').classList.remove('hidden');
+  hideError();
+  // Reset file input so same folder can be re-selected
+  const fi = document.getElementById('folderInput');
+  fi.value = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBanner');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+function hideError() { document.getElementById('errorBanner').style.display = 'none'; }
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function toggleHelp() {
+  const c = document.getElementById('helpContent');
+  const a = document.getElementById('helpArrow');
+  const open = c.classList.toggle('open');
+  a.classList.toggle('open', open);
+}
+</script>
+</body>
+</html>
