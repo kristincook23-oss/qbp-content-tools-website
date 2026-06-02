@@ -268,9 +268,20 @@ async function runBuilder() {
   if (!brandName) { setStatus('Brand name is required', 'error'); return; }
 
   const hasSource = currentTab === 'url' ? !!sourceUrl : !!sourcePaste;
-  const source = currentTab === 'url'
-    ? (sourceUrl ? `Brand website: ${sourceUrl}` : `No URL provided — use your knowledge of ${brandName}`)
-    : (sourcePaste || `No source provided — use your knowledge of ${brandName}`);
+
+  // Fetch live page content if URL mode
+  let source;
+  if (currentTab === 'url' && sourceUrl) {
+    setStatus('Fetching page content…', 'running');
+    let pageContent = null;
+    try {
+      const jinaRes = await fetch('https://r.jina.ai/' + sourceUrl);
+      if (jinaRes.ok) pageContent = await jinaRes.text();
+    } catch (e) { /* fall back */ }
+    source = pageContent || `Brand website: ${sourceUrl}`;
+  } else {
+    source = sourcePaste || `No source provided — use your knowledge of ${brandName}`;
+  }
 
   document.getElementById('run-btn').disabled = true;
   document.getElementById('empty-state').style.display = 'none';
@@ -301,7 +312,6 @@ async function runBuilder() {
       content: buildPrompt(brandName, source, category, notes, blockCount)
     }];
 
-    // If URL mode, also pass URL as context note (Claude can't fetch URLs but we reference it)
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
