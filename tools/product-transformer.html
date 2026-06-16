@@ -649,7 +649,7 @@ async function runTransformer() {
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8000,
         stream: true,
         messages,
@@ -752,7 +752,7 @@ async function runBatch() {
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 8000,
           messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked) }],
         }),

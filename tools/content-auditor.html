@@ -427,7 +427,7 @@ async function runRewrites() {
         method: 'POST',
         headers: { 'Content-Type':'application/json','anthropic-version':'2023-06-01','x-api-key':getApiKey(),'anthropic-dangerous-direct-browser-access':'true' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514', max_tokens: 1000, system: SYSTEM_PROMPT,
+          model: 'claude-sonnet-4-6', max_tokens: 1000, system: SYSTEM_PROMPT,
           messages: [{role:'user',content:`Rewrite this product content. Return ONLY a JSON object — no markdown, no extra text.\n\nProduct name: ${row['Name']||''}\nBrand: ${row['Brand description']||''}\nCategory: ${row['Taxonomy Node']||''}\nCurrent description: ${row['Model Description']||'(none)'}\nCurrent bullets (tilde-separated): ${row['Model Bullet Text']||'(none)'}\n\nReturn exactly: {"description":"...","bullets":"bullet1~bullet2~bullet3"}`}]
         })
       });
