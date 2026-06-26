@@ -339,7 +339,7 @@ function setMode(mode) {
   }
   const srcEl = document.getElementById('sourceInput');
   srcEl.rows = mode === 'batchpaste' ? 16 : 3;
-  if (mode === 'url') srcEl.placeholder = 'https://vendor.com/product-page';
+  if (mode === 'url') srcEl.placeholder = 'https://vendor.com/product-page\n\nPaste one URL, or several (one per line) to process them all at once.';
   if (mode === 'copy') srcEl.placeholder = 'Paste vendor product copy or spec sheet text here…';
   if (mode === 'batchpaste') srcEl.placeholder = 'Paste several products here, separated by a line containing only ===\n\nProduct 1 title\nDescription — EN\n...\n\n===\n\nProduct 2 title\nDescription — EN\n...';
   currentFile = null;
@@ -589,6 +589,13 @@ async function runTransformer() {
   if (batchMode) { runBatch(); return; }
   const batchPasteMode = document.getElementById('modeBatchPaste').classList.contains('active');
   if (batchPasteMode) { runBatchPaste(); return; }
+
+  // Multiple URLs pasted into the URL box (one per line) → fetch each separately
+  if (document.getElementById('modeUrl').classList.contains('active')) {
+    const urlList = document.getElementById('sourceInput').value
+      .split('\n').map(s => s.trim()).filter(s => /^https?:\/\//i.test(s));
+    if (urlList.length > 1) { runBatchUrls(urlList); return; }
+  }
 
   const apiKey = document.getElementById('apiKey').value.trim();
   const fileMode = document.getElementById('modeFile').classList.contains('active');
@@ -883,6 +890,100 @@ async function runBatchPaste() {
 
   progressBar.style.width = '100%';
   setStatus(`Done — ${okCount} of ${chunks.length} products processed`, 'done');
+  document.getElementById('clearBtn').style.display = 'inline';
+  document.getElementById('runBtn').disabled = false;
+  setTimeout(() => { progressWrap.classList.remove('visible'); progressBar.style.width = '0%'; }, 600);
+
+  // Show export footer
+  const totalRows = parsedProducts.length;
+  document.getElementById('resultsContainer').insertAdjacentHTML('beforeend', `
+    <div class="export-footer" style="border:1px solid var(--border);">
+      <div class="export-footer-label">Enterworks Export &nbsp;·&nbsp; <span>${okCount} products · ${totalRows} import rows</span> · bullets tilde-delimited</div>
+      <button class="btn-download" onclick="downloadXlsx()">Download .xlsx</button>
+    </div>`);
+}
+
+async function runBatchUrls(urls) {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!apiKey) { setStatus('API key required', 'error'); return; }
+
+  document.getElementById('runBtn').disabled = true;
+  parsedProducts = [];
+  parsedFaqs = [];
+  richSuggestions = [];
+  const rc = document.getElementById('resultsContainer');
+  rc.innerHTML = '';
+
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  progressWrap.classList.add('visible');
+  progressBar.style.width = '0%';
+
+  const wantFaqs = document.getElementById('includeFaqs').checked;
+  let okCount = 0;
+
+  for (let i = 0; i < urls.length; i++) {
+    setStatus(`Processing ${i + 1} of ${urls.length}… (${urls[i]})`, 'running');
+    progressBar.style.width = Math.round((i / urls.length) * 100) + '%';
+
+    try {
+      let pageContent = '';
+      try {
+        const jinaRes = await fetch('https://r.jina.ai/' + urls[i]);
+        if (jinaRes.ok) pageContent = await jinaRes.text();
+      } catch (e) { /* handled below */ }
+
+      // Skip pages that did not load — don't ask Claude to invent copy from a 404
+      if (!pageContent.trim() || /404|page not found/i.test(pageContent.slice(0, 400))) {
+        rc.innerHTML += `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;margin-bottom:12px;font-size:13px;">⚠️ Product ${i+1}: could not load page content from <span style="word-break:break-all;">${esc(urls[i])}</span> — open it in your browser to confirm the link, or paste its copy into Batch Paste mode instead.</div>`;
+        continue;
+      }
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8000,
+          messages: [{ role: 'user', content: buildPrompt(pageContent, wantFaqs) }],
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        rc.innerHTML += `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;margin-bottom:12px;font-size:13px;">⚠️ Product ${i+1}: API error — ${err.error?.message || response.status}</div>`;
+        continue;
+      }
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '';
+      const products = parseOutput(text);
+      if (!products.length) {
+        rc.innerHTML += `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;margin-bottom:12px;font-size:13px;">⚠️ Product ${i+1}: output received but could not parse</div>`;
+        continue;
+      }
+
+      parsedProducts.push(...products.flatMap(p => p.rows));
+      richSuggestions = richSuggestions.concat(products.map(p => p.rich).flat());
+      products.forEach(p => { (p.faqs || []).forEach(f => parsedFaqs.push({ product: p.name, q: f.q, a: f.a })); });
+      renderResults(products, true); // append mode
+      okCount++;
+
+    } catch (err) {
+      rc.innerHTML += `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;margin-bottom:12px;font-size:13px;">⚠️ Product ${i+1}: ${err.message}</div>`;
+    }
+
+    // Small delay between requests to avoid rate limiting
+    if (i < urls.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+
+  progressBar.style.width = '100%';
+  setStatus(`Done — ${okCount} of ${urls.length} URLs processed`, 'done');
   document.getElementById('clearBtn').style.display = 'inline';
   document.getElementById('runBtn').disabled = false;
   setTimeout(() => { progressWrap.classList.remove('visible'); progressBar.style.width = '0%'; }, 600);
