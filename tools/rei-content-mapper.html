@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QBP × REI Content Mapper</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#ede9e1; --surface:#fff; --surface2:#f7f5f1; --border:#ddd8cf; --border-light:#ece8e0;
+  --accent:#c95f2a; --accent-hover:#b0521f; --warn:#8a6010; --warn-bg:#fdf8e8; --warn-border:#d4b84a;
+  --ok:#2a7a4a; --ok-bg:#f0f7f2; --ok-border:#a9d2ba;
+  --vend:#4a6da5; --vend-bg:#eef3fa; --vend-border:#a9c0e0;
+  --text:#1a1a1a; --muted:#8a8178; --mono:'DM Mono','Courier New',monospace; --sans:'Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:15px 32px;display:flex;align-items:baseline;gap:14px}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.18em;text-transform:uppercase;font-weight:500}
+.logo-sub{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.06em}
+.main{max-width:920px;margin:0 auto;padding:32px 20px 80px;display:flex;flex-direction:column;gap:20px}
+.step-card{background:var(--surface);border:1px solid var(--border);padding:24px 28px}
+.step-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.step-num{width:26px;height:26px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:500;flex-shrink:0}
+.step-label{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
+.step-head-right{margin-left:auto}
+.key-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.key-row input{flex:1;font-family:var(--mono);font-size:13px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);color:var(--text);outline:none}
+.key-row input:focus{border-color:var(--accent)}
+.btn-show{font-family:var(--mono);font-size:11px;padding:10px 14px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer}
+.btn-show:hover{color:var(--text)}
+.key-confirmed{font-family:var(--mono);font-size:11px;color:var(--accent);display:none}
+.hint{font-size:12px;color:var(--muted);line-height:1.65}
+.hint a{color:var(--accent);text-decoration:none}.hint a:hover{text-decoration:underline}
+.drop{position:relative;border:2px dashed var(--border);background:var(--surface2);padding:22px 18px;text-align:center;cursor:pointer;transition:all .15s}
+.drop:hover,.drop.drag-over{border-color:var(--accent);background:#fdf5f0}
+.drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:22px;margin-bottom:4px}
+.drop-label{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.drop-label strong{color:var(--text)}
+.drop-formats{display:block;font-size:10px;color:#bbb5ac;margin-top:3px;letter-spacing:.12em;text-transform:uppercase}
+.drop-success{font-family:var(--mono);font-size:11px;color:var(--ok);margin-top:7px}
+.file-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.file-cap{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.tab-row{margin-top:16px;display:none;align-items:center;gap:10px}
+.tab-row.visible{display:flex}
+.tab-row label{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.08em}
+.tab-row select{font-family:var(--mono);font-size:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);outline:none}
+.opt-row{display:flex;align-items:center;gap:9px;margin-bottom:16px;font-size:13px}
+.opt-row input{width:15px;height:15px;accent-color:var(--accent)}
+.opt-sub{font-size:12px;color:var(--muted);line-height:1.6;margin:-8px 0 16px 24px}
+.gen-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.btn-run{font-family:var(--sans);font-size:14px;font-weight:600;padding:11px 26px;background:var(--accent);color:#fff;border:none;cursor:pointer;transition:background .15s}
+.btn-run:hover:not(:disabled){background:var(--accent-hover)}
+.btn-run:disabled{opacity:.45;cursor:not-allowed}
+.btn-clear-link{font-family:var(--mono);font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:3px;display:none}
+.btn-clear-link:hover{color:var(--text)}
+.status-row{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.status-row.running{color:var(--accent)}.status-row.done{color:var(--ok)}.status-row.error{color:#b03030}
+.spinner{width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-wrap{width:100%;height:4px;background:var(--border);margin-top:14px;display:none}
+.progress-wrap.visible{display:block}
+.progress-bar{height:100%;background:var(--accent);width:0;transition:width .3s ease}
+.summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.chip{font-family:var(--mono);font-size:11px;padding:5px 11px;border:1px solid var(--border)}
+.chip.ok{background:var(--ok-bg);border-color:var(--ok-border);color:var(--ok)}
+.chip.vend{background:var(--vend-bg);border-color:var(--vend-border);color:var(--vend)}
+.chip.rev{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn)}
+.result-card{background:var(--surface);border:1px solid var(--border);overflow:hidden}
+.result-header{background:var(--surface2);border-bottom:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.result-title{font-family:var(--mono);font-size:12px;font-weight:500}
+.result-meta{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+table.fields{width:100%;border-collapse:collapse}
+table.fields td{padding:8px 20px;border-bottom:1px solid var(--border-light);vertical-align:top;font-size:13px;line-height:1.5}
+table.fields tr:last-child td{border-bottom:none}
+.f-name{font-family:var(--mono);font-size:11px;color:var(--muted);width:200px;white-space:nowrap}
+.f-val{color:var(--text)}
+.f-val.empty{color:#bbb5ac;font-style:italic}
+.f-src{width:150px;text-align:right;white-space:nowrap}
+.badge{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.06em;padding:2px 7px;border:1px solid}
+.badge.ok{background:var(--ok-bg);border-color:var(--ok-border);color:var(--ok)}
+.badge.vend{background:var(--vend-bg);border-color:var(--vend-border);color:var(--vend)}
+.badge.rev{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn)}
+.src-link{display:block;font-family:var(--mono);font-size:9px;color:var(--vend);margin-top:3px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.export-footer{background:var(--surface2);border-top:1px solid var(--border);padding:13px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.export-footer-label{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.btn-download{font-family:var(--sans);font-size:13px;font-weight:600;padding:10px 22px;background:var(--accent);color:#fff;border:none;cursor:pointer}
+.btn-download:hover{background:var(--accent-hover)}
+.btn-download.alt{background:var(--surface);color:var(--accent);border:1px solid var(--accent)}
+.banner{font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-border);padding:10px 14px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">QBP × REI Content Mapper</div>
+  <div class="logo-sub">National-account submission builder</div>
+</header>
+
+<div class="main">
+
+  <div class="step-card">
+    <div class="step-head"><div class="step-num">1</div><div class="step-label">API Key</div>
+      <div class="step-head-right"><span class="hint">only needed for vendor-gap lookup</span></div>
+    </div>
+    <div class="key-row">
+      <input type="password" id="apiKey" placeholder="sk-ant-api03-…" autocomplete="off" oninput="checkKey()">
+      <button class="btn-show" onclick="toggleKey(this)">Show</button>
+      <span class="key-confirmed" id="keyConfirmed">✓ Key set</span>
+    </div>
+    <div class="hint">Used only to call Claude with web search, never saved or sent anywhere else. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-head"><div class="step-num">2</div><div class="step-label">Files</div></div>
+    <div class="file-grid">
+      <div>
+        <div class="file-cap">REI request</div>
+        <div class="drop" id="dropReq"><input type="file" accept=".xlsx,.xls" onchange="loadReq(this.files[0])">
+          <div class="drop-icon">📋</div><div class="drop-label"><strong>REI request</strong></div>
+          <span class="drop-formats">.xlsx</span><div class="drop-success" id="okReq"></div></div>
+      </div>
+      <div>
+        <div class="file-cap">Enterworks export(s)</div>
+        <div class="drop" id="dropEw"><input type="file" accept=".xlsx,.xls" multiple onchange="loadEw(this.files)">
+          <div class="drop-icon">📦</div><div class="drop-label"><strong>Enterworks</strong> (multiple ok)</div>
+          <span class="drop-formats">.xlsx</span><div class="drop-success" id="okEw"></div></div>
+      </div>
+      <div>
+        <div class="file-cap">REI template</div>
+        <div class="drop" id="dropTpl"><input type="file" accept=".xlsx,.xls" onchange="loadTpl(this.files[0])">
+          <div class="drop-icon">🎯</div><div class="drop-label"><strong>REI template</strong></div>
+          <span class="drop-formats">.xlsx</span><div class="drop-success" id="okTpl"></div></div>
+      </div>
+    </div>
+    <div class="tab-row" id="tabRow">
+      <label>Category tab:</label>
+      <select id="tabSelect"></select>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-head"><div class="step-num">3</div><div class="step-label">Build</div></div>
+    <div class="opt-row"><input type="checkbox" id="enrich"><label for="enrich">Fill spec gaps from vendor sites (Claude web search)</label></div>
+    <div class="opt-sub">Off: Enterworks fields only, everything else flagged for manual entry. On: for each empty REI spec, Claude searches the UPC / part number, reads the vendor page, and returns a value plus its source link, marked <em>vendor — verify</em>.</div>
+    <div class="gen-row">
+      <button class="btn-run" id="runBtn" onclick="run()" disabled>Build Template</button>
+      <button class="btn-clear-link" id="clearBtn" onclick="clearAll()">Clear all</button>
+      <div class="status-row" id="status"></div>
+    </div>
+    <div class="progress-wrap" id="progWrap"><div class="progress-bar" id="progBar"></div></div>
+  </div>
+
+  <div id="results" style="display:flex;flex-direction:column;gap:20px"></div>
+
+</div>
+
+<script>
+const LB_TO_G = 453.592;
+const UNIVERSAL_MAP = {
+  'Vendor Item #':['copy','SKU'], 'Brand':['copy','Brand name'],
+  'Customer-Facing Name':['copy','Name'], 'Lead Marketing Description':['copy','Model Description'],
+  'Weight':['weight_lbs','Weight'], 'Weight (g)':['weight_g','Weight'],
+};
+const FEATURE_SOURCES = ['Model Bullet Text','SKU Bullet Text'];
+const RESERVED_TABS = ['Instructions','templateUuid','Specifications','Specifications Mapping'];
+
+let reqData=null, ewData=null, tplBuf=null, tplWb=null, lastResults=null;
+
+// ---------- ui helpers ----------
+function checkKey(){const v=document.getElementById('apiKey').value.trim();document.getElementById('keyConfirmed').style.display=v.startsWith('sk-')?'inline':'none';}
+function toggleKey(b){const i=document.getElementById('apiKey');if(i.type==='password'){i.type='text';b.textContent='Hide';}else{i.type='password';b.textContent='Show';}}
+function setStatus(t,c){const s=document.getElementById('status');s.className='status-row'+(c?' '+c:'');s.innerHTML=(c==='running'?'<span class="spinner"></span>':'')+t;}
+function maybeEnable(){document.getElementById('runBtn').disabled=!(reqData&&ewData&&tplWb&&document.getElementById('tabSelect').value);document.getElementById('clearBtn').style.display=(reqData||ewData||tplWb)?'inline':'none';}
+function readBuf(file){return file.arrayBuffer();}
+
+// ---------- loaders ----------
+async function loadReq(f){if(!f)return;const wb=XLSX.read(await readBuf(f));reqData=parseRequest(wb);document.getElementById('okReq').textContent='✓ '+Object.keys(reqData).length+' items';maybeEnable();}
+async function loadEw(files){if(!files.length)return;ewData={};let n=0;for(const f of files){const wb=XLSX.read(await readBuf(f));n+=mergeEnterworks(wb,ewData);}document.getElementById('okEw').textContent='✓ '+Object.keys(ewData).length+' SKUs ('+files.length+' file'+(files.length>1?'s':'')+')';maybeEnable();}
+async function loadTpl(f){if(!f)return;tplBuf=await readBuf(f);tplWb=XLSX.read(tplBuf);const tabs=tplWb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));const sel=document.getElementById('tabSelect');sel.innerHTML=tabs.map(t=>`<option>${t}</option>`).join('');document.getElementById('tabRow').classList.add('visible');document.getElementById('okTpl').textContent='✓ '+tabs.length+' categories';sel.onchange=maybeEnable;maybeEnable();}
+function clearAll(){reqData=ewData=tplBuf=tplWb=lastResults=null;['okReq','okEw','okTpl'].forEach(i=>document.getElementById(i).textContent='');document.getElementById('tabRow').classList.remove('visible');document.getElementById('results').innerHTML='';setStatus('');maybeEnable();}
+
+function rowsOf(wb,name){return XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:false});}
+
+function parseRequest(wb){const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());const idx={};hdr.forEach((h,i)=>idx[h]=i);const out={};for(let r=1;r<rows.length;r++){const vi=rows[r][idx['Vendor Item #']];if(vi==null)continue;out[String(vi).trim()]={reiItem:rows[r][idx['REI Item #']],brand:rows[r][idx['Brand']],dept:rows[r][idx['REI Dept']]};}return out;}
+function mergeEnterworks(wb,out){const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());let n=0;for(let r=1;r<rows.length;r++){const rec={};hdr.forEach((h,i)=>rec[h]=rows[r][i]);const sku=rec['SKU'];if(sku&&String(sku).trim()&&String(sku).trim()!=='SKU'){out[String(sku).trim()]=rec;n++;}}return n;}
+
+function loadAllowed(wb,tab){const mp=rowsOf(wb,'Specifications Mapping');const uf={};(mp[0]||[]).forEach((u,i)=>{if(u&&mp[1]&&mp[1][i])uf[String(u).trim()]=String(mp[1][i]).trim();});const sp=rowsOf(wb,'Specifications');const out={};(sp[0]||[]).forEach((h,ci)=>{if(!h)return;const m=String(h).trim().match(/^(.*)-([0-9a-f-]{36})$/);if(!m||m[1]!==tab)return;const field=uf[m[2]];if(!field)return;const vals=[];for(let r=1;r<sp.length;r++){const v=sp[r][ci];if(v!=null&&String(v).trim())vals.push(String(v).trim());}out[field]=vals;});return out;}
+function templateHeaders(wb,tab){const rows=rowsOf(wb,tab);return (rows[3]||[]).map((v,i)=>[i,v==null?'':String(v).trim()]).filter(x=>x[1]);}
+
+// ---------- transforms ----------
+function transform(kind,src,ew){let raw=ew[src];if(raw==null||String(raw).trim()==='')return null;raw=String(raw).trim();if(kind==='copy')return raw;if(kind==='weight_lbs'){const n=parseFloat(raw);return isNaN(n)?raw:n+' lbs.';}if(kind==='weight_g'){const n=parseFloat(raw);return isNaN(n)?null:String(Math.round(n*LB_TO_G));}return raw;}
+function buildFeatures(ew){
+  const f=[];
+  for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(x=>{if(x.trim())f.push(x.trim());});}
+  // REI VIF rule: include MPN + UPC as a bullet
+  const mpn=ew['Manufacturer Part Number'], upc=ew['UPC Value'];
+  if((mpn&&String(mpn).trim())||(upc&&String(upc).trim())){
+    const parts=[];
+    if(mpn&&String(mpn).trim())parts.push('Manufacturer Part Number: '+String(mpn).trim());
+    if(upc&&String(upc).trim())parts.push('UPC: '+String(upc).trim());
+    f.push(parts.join(' / '));
+  }
+  // REI VIF rule: include Prop 65 warning as a bullet when present
+  const prop=ew['Prop 65 Text'];
+  if(prop&&String(prop).trim())f.push(String(prop).trim());
+  return f;
+}
+
+// ---------- core deterministic map ----------
+function mapDeterministic(){
+  const tab=document.getElementById('tabSelect').value;
+  const headers=templateHeaders(tplWb,tab);
+  const allowed=loadAllowed(tplWb,tab);
+  const out=[];
+  for(const vi of Object.keys(reqData)){
+    if(!ewData[vi])continue;
+    const ew=ewData[vi], feats=buildFeatures(ew), cells={};
+    for(const [ci,field] of headers){
+      if(field==='REI Item #') cells[ci]={field,value:reqData[vi].reiItem,src:'ok',note:'REI request'};
+      else if(UNIVERSAL_MAP[field]){const [k,s]=UNIVERSAL_MAP[field];const v=transform(k,s,ew);cells[ci]={field,value:v,src:v!=null?'ok':'rev',note:'Enterworks: '+s};}
+      else if(/^Feature \d+$/.test(field)){const n=parseInt(field.split(' ')[1])-1;cells[ci]={field,value:n<feats.length?feats[n]:null,src:n<feats.length?'ok':'rev',note:'Enterworks bullet'};}
+      else cells[ci]={field,value:null,src:'rev',note:'spec',allowed:allowed[field]||null};
+    }
+    out.push({vi,reiItem:reqData[vi].reiItem,ew,cells,headers,tab});
+  }
+  return out;
+}
+
+// ---------- vendor enrichment via Claude web search ----------
+function buildEnrichPrompt(ew,needed){
+  const id=[`Brand: ${ew['Brand name']||''}`,`Product name: ${ew['Name']||''}`,`Manufacturer part #: ${ew['Manufacturer Part Number']||''}`,`UPC: ${ew['UPC Value']||''}`].join('\n');
+  const fieldLines=needed.map(n=>n.allowed&&n.allowed.length?`- "${n.field}" (must be one of: ${n.allowed.join(' | ')})`:`- "${n.field}" (short value)`).join('\n');
+  return `You are filling a retail product spec sheet for REI. This content is consumer-facing and is reviewed by REI copywriters, so prefer the brand's own consumer product page as your source and match the wording the brand uses. Find the exact product below on the manufacturer or an authorized retailer page using its UPC or part number, then return values for the requested fields ONLY if you can confirm them from a real page.
+
+PRODUCT:
+${id}
+
+FIELDS NEEDED:
+${fieldLines}
+
+Rules:
+- Match the EXACT product (right size/variant). The UPC is the strongest identifier.
+- For fields with an allowed list, return one of those exact strings, or omit the field if none fit.
+- Omit any field you cannot confirm. Do not guess.
+- Reply with ONLY a JSON object, no prose. Shape: {"FieldName":{"value":"...","source":"https://..."}}`;
+}
+async function enrichProduct(apiKey,ew,needed){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
+  const data=await res.json();
+  const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  const m=text.replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
+  if(!m)return {};
+  try{return JSON.parse(m[0]);}catch(e){return {};}
+}
+
+// ---------- run ----------
+async function run(){
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('results').innerHTML='';
+  const products=mapDeterministic();
+  if(!products.length){setStatus('No matching SKUs between request and Enterworks exports.','error');document.getElementById('runBtn').disabled=false;return;}
+
+  const doEnrich=document.getElementById('enrich').checked;
+  const apiKey=document.getElementById('apiKey').value.trim();
+  if(doEnrich&&!apiKey.startsWith('sk-')){setStatus('Add an API key to use vendor lookup, or uncheck it.','error');document.getElementById('runBtn').disabled=false;return;}
+
+  if(doEnrich){
+    document.getElementById('progWrap').classList.add('visible');
+    for(let i=0;i<products.length;i++){
+      const p=products[i];
+      setStatus(`Vendor lookup ${i+1} of ${products.length}…`,'running');
+      document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
+      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.field!=='Sustainability').map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
+      if(needed.length){
+        try{
+          const found=await enrichProduct(apiKey,p.ew,needed);
+          for(const n of needed){
+            const hit=found[n.field];
+            if(hit&&hit.value){p.cells[n.ci].value=hit.value;p.cells[n.ci].src='vend';p.cells[n.ci].note='vendor — verify';p.cells[n.ci].link=hit.source||'';}
+          }
+        }catch(e){setStatus('Vendor lookup error: '+e.message,'error');}
+      }
+    }
+    document.getElementById('progBar').style.width='100%';
+  }
+
+  lastResults=products;
+  render(products);
+  setStatus('Done. Review flagged fields, then download.','done');
+  document.getElementById('runBtn').disabled=false;
+}
+
+// ---------- render ----------
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function render(products){
+  let auto=0,vend=0,rev=0;
+  products.forEach(p=>Object.values(p.cells).forEach(c=>{if(c.src==='ok')auto++;else if(c.src==='vend')vend++;else rev++;}));
+  const wrap=document.getElementById('results');
+  let html=`<div class="summary"><span class="chip ok">${auto} from Enterworks</span><span class="chip vend">${vend} vendor — verify</span><span class="chip rev">${rev} manual review</span><span class="chip">${products.length} products</span></div>`;
+  for(const p of products){
+    const name=p.ew['Name']||p.vi;
+    let rows='';
+    const order=Object.keys(p.cells).map(Number).sort((a,b)=>a-b);
+    for(const ci of order){
+      const c=p.cells[ci];
+      const badge=c.src==='ok'?'<span class="badge ok">EW</span>':c.src==='vend'?'<span class="badge vend">VENDOR</span>':'<span class="badge rev">REVIEW</span>';
+      const link=c.link?`<a class="src-link" href="${esc(c.link)}" target="_blank">${esc(c.link)}</a>`:'';
+      const val=c.value!=null&&String(c.value).trim()!==''?`<span class="f-val">${esc(c.value)}</span>`:`<span class="f-val empty">needs entry</span>`;
+      rows+=`<tr><td class="f-name">${esc(c.field)}</td><td>${val}</td><td class="f-src">${badge}${link}</td></tr>`;
+    }
+    html+=`<div class="result-card"><div class="result-header"><div class="result-title">${esc(p.vi)} · REI ${esc(p.reiItem||'—')}</div><div class="result-meta">${esc(name)}</div></div><table class="fields">${rows}</table></div>`;
+  }
+  html+=`<div class="result-card"><div class="export-footer"><div class="export-footer-label">Filled REI template + QA report</div><div style="display:flex;gap:10px"><button class="btn-download alt" onclick="downloadQA()">QA report</button><button class="btn-download" onclick="downloadFilled()">Download filled template</button></div></div></div>`;
+  if(products.some(p=>Object.values(p.cells).some(c=>c.src==='rev')))
+    html+=`<div class="banner">Fields marked REVIEW are empty in Enterworks and were not confirmed from a vendor page. Fill these in before uploading. Vendor-sourced values should be spot-checked against their source link.</div>`;
+  wrap.innerHTML=html;
+}
+
+// ---------- exports ----------
+function downloadFilled(){
+  const wb=XLSX.read(tplBuf,{cellStyles:true});
+  const tab=lastResults[0].tab, ws=wb.Sheets[tab];
+  // clear existing data rows (row index >=4 / Excel row 5+)
+  Object.keys(ws).forEach(k=>{if(k[0]==='!')return;const cell=XLSX.utils.decode_cell(k);if(cell.r>=4)delete ws[k];});
+  let maxC=0;
+  lastResults.forEach((p,off)=>{const r=4+off;for(const ci of Object.keys(p.cells)){const c=p.cells[ci];const col=+ci;if(c.value!=null&&String(c.value).trim()!==''){ws[XLSX.utils.encode_cell({r,c:col})]={t:'s',v:String(c.value)};}if(col>maxC)maxC=col;}});
+  const lastR=4+lastResults.length-1;
+  const cur=XLSX.utils.decode_range(ws['!ref']);
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(cur.e.r,lastR),c:Math.max(cur.e.c,maxC)}});
+  XLSX.writeFile(wb,reiFileName(tab));
+}
+function reiFileName(tab){
+  const nums=[...new Set(lastResults.map(p=>String(p.reiItem||'').trim()).filter(Boolean))];
+  const clean=s=>s.replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,'');
+  let base;
+  if(nums.length===1) base=clean(nums[0]);
+  else if(nums.length>1&&nums.length<=3) base=nums.map(clean).join('_');
+  else base=clean(tab)+'_'+lastResults.length+'items';
+  return base+'.xlsx';
+}
+function downloadQA(){
+  const aoa=[['Vendor Item #','REI Item #','REI Field','Value','Source','Note / Link']];
+  lastResults.forEach(p=>{const order=Object.keys(p.cells).map(Number).sort((a,b)=>a-b);order.forEach(ci=>{const c=p.cells[ci];aoa.push([p.vi,p.reiItem||'',c.field,c.value!=null?String(c.value):'',c.src==='ok'?'Enterworks':c.src==='vend'?'Vendor (verify)':'Manual review',c.link||c.note||'']);});});
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'QA Report');XLSX.writeFile(wb,'REI_QA_Report.xlsx');
+}
+
+// drag styling
+document.querySelectorAll('.drop').forEach(d=>{['dragover','dragenter'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.add('drag-over');}));['dragleave','drop'].forEach(e=>d.addEventListener(e,()=>d.classList.remove('drag-over')));});
+</script>
+</body>
+</html>
