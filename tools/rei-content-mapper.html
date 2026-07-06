@@ -162,12 +162,12 @@ const LB_TO_G = 453.592;
 const UNIVERSAL_MAP = {
   'Vendor Item #':['copy','SKU'], 'Brand':['copy','Brand name'],
   'Customer-Facing Name':['copy','Name'], 'Lead Marketing Description':['copy','Model Description'],
-  'Weight':['weight_lbs','Weight'], 'Weight (g)':['weight_g','Weight'],
+  'Weight':['weight_disp','Weight'], 'Weight (g)':['weight_g','Weight'],
 };
 const FEATURE_SOURCES = ['Model Bullet Text','SKU Bullet Text'];
 const RESERVED_TABS = ['Instructions','templateUuid','Specifications','Specifications Mapping'];
 
-let reqData=null, ewData=null, tplBuf=null, tplWb=null, lastResults=null;
+let reqData=null, ewData=null, tplBuf=null, tplWb=null, tplName='template', lastResults=null;
 
 // ---------- ui helpers ----------
 function checkKey(){const v=document.getElementById('apiKey').value.trim();document.getElementById('keyConfirmed').style.display=v.startsWith('sk-')?'inline':'none';}
@@ -179,7 +179,7 @@ function readBuf(file){return file.arrayBuffer();}
 // ---------- loaders ----------
 async function loadReq(f){if(!f)return;const wb=XLSX.read(await readBuf(f));reqData=parseRequest(wb);document.getElementById('okReq').textContent='✓ '+Object.keys(reqData).length+' items';maybeEnable();}
 async function loadEw(files){if(!files.length)return;ewData={};let n=0;for(const f of files){const wb=XLSX.read(await readBuf(f));n+=mergeEnterworks(wb,ewData);}document.getElementById('okEw').textContent='✓ '+Object.keys(ewData).length+' SKUs ('+files.length+' file'+(files.length>1?'s':'')+')';maybeEnable();}
-async function loadTpl(f){if(!f)return;tplBuf=await readBuf(f);tplWb=XLSX.read(tplBuf);const tabs=tplWb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));const sel=document.getElementById('tabSelect');sel.innerHTML=tabs.map(t=>`<option>${t}</option>`).join('');document.getElementById('tabRow').classList.add('visible');document.getElementById('okTpl').textContent='✓ '+tabs.length+' categories';sel.onchange=maybeEnable;maybeEnable();}
+async function loadTpl(f){if(!f)return;tplName=f.name||'template';tplBuf=await readBuf(f);tplWb=XLSX.read(tplBuf);const tabs=tplWb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));const sel=document.getElementById('tabSelect');sel.innerHTML=tabs.map(t=>`<option>${t}</option>`).join('');document.getElementById('tabRow').classList.add('visible');document.getElementById('okTpl').textContent='✓ '+tabs.length+' categories';sel.onchange=maybeEnable;maybeEnable();}
 function clearAll(){reqData=ewData=tplBuf=tplWb=lastResults=null;['okReq','okEw','okTpl'].forEach(i=>document.getElementById(i).textContent='');document.getElementById('tabRow').classList.remove('visible');document.getElementById('results').innerHTML='';setStatus('');maybeEnable();}
 
 function rowsOf(wb,name){return XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:false});}
@@ -191,7 +191,20 @@ function loadAllowed(wb,tab){const mp=rowsOf(wb,'Specifications Mapping');const 
 function templateHeaders(wb,tab){const rows=rowsOf(wb,tab);return (rows[3]||[]).map((v,i)=>[i,v==null?'':String(v).trim()]).filter(x=>x[1]);}
 
 // ---------- transforms ----------
-function transform(kind,src,ew){let raw=ew[src];if(raw==null||String(raw).trim()==='')return null;raw=String(raw).trim();if(kind==='copy')return raw;if(kind==='weight_lbs'){const n=parseFloat(raw);return isNaN(n)?raw:n+' lbs.';}if(kind==='weight_g'){const n=parseFloat(raw);return isNaN(n)?null:String(Math.round(n*LB_TO_G));}return raw;}
+function toGrams(ew){
+  const raw=ew['Weight']; if(raw==null||String(raw).trim()==='')return null;
+  const n=parseFloat(String(raw).trim()); if(isNaN(n))return null;
+  const uom=String(ew['Weight UOM']||'LB').trim().toUpperCase();
+  const mult={LB:453.592,LBS:453.592,KG:1000,OZ:28.3495,G:1,GR:1,GRAM:1,GRAMS:1}[uom]||453.592;
+  return Math.round(n*mult);
+}
+function transform(kind,src,ew){
+  if(kind==='weight_disp'){const g=toGrams(ew);return g==null?null:g+' g';}
+  if(kind==='weight_g'){const g=toGrams(ew);return g==null?null:String(g);}
+  let raw=ew[src];if(raw==null||String(raw).trim()==='')return null;raw=String(raw).trim();
+  if(kind==='copy')return raw;
+  return raw;
+}
 function buildFeatures(ew){
   const f=[];
   for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(x=>{if(x.trim())f.push(x.trim());});}
@@ -324,23 +337,23 @@ function render(products){
 function downloadFilled(){
   const wb=XLSX.read(tplBuf,{cellStyles:true});
   const tab=lastResults[0].tab, ws=wb.Sheets[tab];
-  // clear existing data rows (row index >=4 / Excel row 5+)
-  Object.keys(ws).forEach(k=>{if(k[0]==='!')return;const cell=XLSX.utils.decode_cell(k);if(cell.r>=4)delete ws[k];});
+  // Row 4 (Excel row 5) is REI's example row; keep it. Clear only rows >=5, write from row 6.
+  Object.keys(ws).forEach(k=>{if(k[0]==='!')return;const cell=XLSX.utils.decode_cell(k);if(cell.r>=5)delete ws[k];});
   let maxC=0;
-  lastResults.forEach((p,off)=>{const r=4+off;for(const ci of Object.keys(p.cells)){const c=p.cells[ci];const col=+ci;if(c.value!=null&&String(c.value).trim()!==''){ws[XLSX.utils.encode_cell({r,c:col})]={t:'s',v:String(c.value)};}if(col>maxC)maxC=col;}});
-  const lastR=4+lastResults.length-1;
+  lastResults.forEach((p,off)=>{const r=5+off;for(const ci of Object.keys(p.cells)){const c=p.cells[ci];const col=+ci;if(c.value!=null&&String(c.value).trim()!==''){ws[XLSX.utils.encode_cell({r,c:col})]={t:'s',v:String(c.value)};}if(col>maxC)maxC=col;}});
+  const lastR=5+lastResults.length-1;
   const cur=XLSX.utils.decode_range(ws['!ref']);
   ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(cur.e.r,lastR),c:Math.max(cur.e.c,maxC)}});
   XLSX.writeFile(wb,reiFileName(tab));
 }
 function reiFileName(tab){
-  const nums=[...new Set(lastResults.map(p=>String(p.reiItem||'').trim()).filter(Boolean))];
-  const clean=s=>s.replace(/[\\/:*?"<>|]/g,'').replace(/\s+/g,'');
-  let base;
-  if(nums.length===1) base=clean(nums[0]);
-  else if(nums.length>1&&nums.length<=3) base=nums.map(clean).join('_');
-  else base=clean(tab)+'_'+lastResults.length+'items';
-  return base+'.xlsx';
+  // Matches the accepted convention, e.g. "Drivetrain_Components_shimano-4_16_2026.xlsx"
+  let base=(tplName||'template').replace(/\.[^.]+$/,'');
+  base=base.replace(/__?\d+_?$/,'').replace(/\(\d+\)$/,'').replace(/[-_ ]?copy$/i,'').replace(/[-_ ]+$/,'')||'template';
+  const brand=String((lastResults[0]&&lastResults[0].ew&&lastResults[0].ew['Brand name'])||'brand').trim().toLowerCase().replace(/\s+/g,'-');
+  const d=new Date(), date=`${d.getMonth()+1}_${d.getDate()}_${d.getFullYear()}`;
+  const clean=s=>s.replace(/[\\/:*?"<>|]/g,'');
+  return `${clean(base)}_${clean(brand)}-${date}.xlsx`;
 }
 function downloadQA(){
   const aoa=[['Vendor Item #','REI Item #','REI Field','Value','Source','Note / Link']];
