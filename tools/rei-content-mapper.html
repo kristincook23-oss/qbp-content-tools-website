@@ -6,6 +6,7 @@
 <title>QBP × REI Content Mapper</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/umd/index.min.js"></script>
 <style>
 :root {
   --bg:#ede9e1; --surface:#fff; --surface2:#f7f5f1; --border:#ddd8cf; --border-light:#ece8e0;
@@ -154,6 +155,21 @@ table.fields tr:last-child td{border-bottom:none}
   </div>
 
   <div id="results" style="display:flex;flex-direction:column;gap:20px"></div>
+
+  <div class="step-card">
+    <div class="step-head"><div class="step-num">✓</div><div class="step-label">Validate a filled sheet (optional)</div></div>
+    <div class="opt-sub" style="margin:-4px 0 16px 0">Upload a completed REI template to check every controlled-value cell against REI's allowed lists. Catches typos, wrong units, and paste errors before you upload. Runs entirely in the browser, no API key needed.</div>
+    <div style="max-width:320px">
+      <div class="drop" id="dropVal"><input type="file" accept=".xlsx,.xls" onchange="loadVal(this.files[0])">
+        <div class="drop-icon">🔍</div><div class="drop-label"><strong>Filled template</strong></div>
+        <span class="drop-formats">.xlsx</span><div class="drop-success" id="okVal"></div></div>
+    </div>
+    <div class="gen-row" style="margin-top:16px">
+      <button class="btn-run" id="valBtn" onclick="validateFilled()" disabled>Check Values</button>
+      <div class="status-row" id="valStatus"></div>
+    </div>
+    <div id="valResults" style="margin-top:18px;display:flex;flex-direction:column;gap:14px"></div>
+  </div>
 
 </div>
 
@@ -334,17 +350,51 @@ function render(products){
 }
 
 // ---------- exports ----------
+// Edit REI's own template in place (preserves dropdowns, images, styles) instead of rebuilding it.
+function colLetter(n){let s='';n=n+1;while(n>0){const k=(n-1)%26;s=String.fromCharCode(65+k)+s;n=Math.floor((n-1)/26);}return s;}
+function xesc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function reEsc(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function resolveSheetPath(files,tabName){
+  const wbXml=fflate.strFromU8(files['xl/workbook.xml']);
+  const sm=new RegExp('<sheet\\b[^>]*\\bname="'+reEsc(tabName)+'"[^>]*>').exec(wbXml);
+  if(!sm)throw new Error('Tab not found: '+tabName);
+  const rid=(/r:id="([^"]+)"/.exec(sm[0])||[])[1];
+  const relsXml=fflate.strFromU8(files['xl/_rels/workbook.xml.rels']);
+  const rm=new RegExp('<Relationship\\b[^>]*\\bId="'+reEsc(rid)+'"[^>]*>').exec(relsXml);
+  let target=(/Target="([^"]+)"/.exec(rm[0])||[])[1];
+  target=target.replace(/^\/?xl\//,'').replace(/^\//,'');
+  return 'xl/'+target;
+}
+function editSheetXml(xml,products){
+  const sdStart=xml.indexOf('<sheetData');
+  const openEnd=xml.indexOf('>',sdStart)+1;
+  const selfClosed=xml[openEnd-2]==='/';
+  let head,tail,inner;
+  if(selfClosed){head=xml.slice(0,sdStart)+'<sheetData>';tail='</sheetData>'+xml.slice(openEnd);inner='';}
+  else{const closeIdx=xml.indexOf('</sheetData>',openEnd);head=xml.slice(0,openEnd);tail=xml.slice(closeIdx);inner=xml.slice(openEnd,closeIdx);}
+  const rowRe=/<row\b[^>]*?(?:\/>|>[\s\S]*?<\/row>)/g;let m;const kept=[];
+  while((m=rowRe.exec(inner))){const rm=/\br="(\d+)"/.exec(m[0]);const rn=rm?+rm[1]:0;if(rn<=5)kept.push(m[0]);}
+  const newRows=[];
+  products.forEach((p,off)=>{const r=6+off;let cells='';
+    Object.keys(p.cells).map(Number).sort((a,b)=>a-b).forEach(ci=>{const c=p.cells[ci];
+      if(c.value!=null&&String(c.value).trim()!=='')cells+='<c r="'+colLetter(ci)+r+'" t="inlineStr"><is><t xml:space="preserve">'+xesc(c.value)+'</t></is></c>';});
+    newRows.push('<row r="'+r+'">'+cells+'</row>');});
+  let out=head+kept.join('')+newRows.join('')+tail;
+  const lastR=6+products.length-1;
+  out=out.replace(/(<dimension ref="[A-Z]+\d+:)([A-Z]+)(\d+)("\s*\/>)/,(mm,a,ec,er,z)=>a+ec+Math.max(+er,lastR)+z);
+  return out;
+}
 function downloadFilled(){
-  const wb=XLSX.read(tplBuf,{cellStyles:true});
-  const tab=lastResults[0].tab, ws=wb.Sheets[tab];
-  // Row 4 (Excel row 5) is REI's example row; keep it. Clear only rows >=5, write from row 6.
-  Object.keys(ws).forEach(k=>{if(k[0]==='!')return;const cell=XLSX.utils.decode_cell(k);if(cell.r>=5)delete ws[k];});
-  let maxC=0;
-  lastResults.forEach((p,off)=>{const r=5+off;for(const ci of Object.keys(p.cells)){const c=p.cells[ci];const col=+ci;if(c.value!=null&&String(c.value).trim()!==''){ws[XLSX.utils.encode_cell({r,c:col})]={t:'s',v:String(c.value)};}if(col>maxC)maxC=col;}});
-  const lastR=5+lastResults.length-1;
-  const cur=XLSX.utils.decode_range(ws['!ref']);
-  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(cur.e.r,lastR),c:Math.max(cur.e.c,maxC)}});
-  XLSX.writeFile(wb,reiFileName(tab));
+  try{
+    const files=fflate.unzipSync(new Uint8Array(tplBuf));
+    const tab=lastResults[0].tab;
+    const path=resolveSheetPath(files,tab);
+    files[path]=fflate.strToU8(editSheetXml(fflate.strFromU8(files[path]),lastResults));
+    const out=fflate.zipSync(files,{level:6});
+    const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=reiFileName(tab);
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  }catch(e){alert('Could not build the file: '+e.message);}
 }
 function reiFileName(tab){
   // Matches the accepted convention, e.g. "Drivetrain_Components_shimano-4_16_2026.xlsx"
@@ -359,6 +409,67 @@ function downloadQA(){
   const aoa=[['Vendor Item #','REI Item #','REI Field','Value','Source','Note / Link']];
   lastResults.forEach(p=>{const order=Object.keys(p.cells).map(Number).sort((a,b)=>a-b);order.forEach(ci=>{const c=p.cells[ci];aoa.push([p.vi,p.reiItem||'',c.field,c.value!=null?String(c.value):'',c.src==='ok'?'Enterworks':c.src==='vend'?'Vendor (verify)':'Manual review',c.link||c.note||'']);});});
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'QA Report');XLSX.writeFile(wb,'REI_QA_Report.xlsx');
+}
+
+// ---------- validate a filled sheet against REI allowed values ----------
+let valBuf=null, valWb=null;
+async function loadVal(f){if(!f)return;valBuf=await f.arrayBuffer();valWb=XLSX.read(valBuf);document.getElementById('okVal').textContent='✓ loaded';document.getElementById('valBtn').disabled=false;}
+function suggestFix(v,allowed){
+  const nv=v.toLowerCase().replace(/[^a-z0-9.]/g,'');
+  for(const a of allowed){if(a.toLowerCase()===v.toLowerCase())return a;}
+  for(const a of allowed){const na=a.toLowerCase().replace(/[^a-z0-9.]/g,'');if(na&&(nv===na||nv.startsWith(na)||na.startsWith(nv)))return a;}
+  return null;
+}
+function validateFilled(){
+  const wb=valWb;
+  const prodTabs=wb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));
+  const issues=[]; let checkedRows=0;
+  for(const tab of prodTabs){
+    const allowed=loadAllowed(wb,tab);
+    if(!Object.keys(allowed).length)continue;
+    const rows=rowsOf(wb,tab);
+    const hdr=(rows[3]||[]).map((v,i)=>[i,v==null?'':String(v).trim()]).filter(x=>x[1]);
+    for(let r=4;r<rows.length;r++){
+      const row=rows[r]; if(!row)continue;
+      const sku=row[0]==null?'':String(row[0]).trim();
+      if(!sku||sku==='ABK32')continue; // skip empty + REI's example placeholder row
+      checkedRows++;
+      for(const [ci,field] of hdr){
+        if(!allowed[field])continue;
+        const v=row[ci]==null?'':String(row[ci]).trim();
+        if(!v)continue;
+        if(!allowed[field].includes(v))issues.push({tab,row:r+1,sku,field,value:v,allowed:allowed[field]});
+      }
+    }
+  }
+  renderValidation(issues,checkedRows);
+}
+function renderValidation(issues,checkedRows){
+  const wrap=document.getElementById('valResults'), st=document.getElementById('valStatus');
+  if(!checkedRows){st.className='status-row error';st.textContent='No product rows found. Is this a filled REI template?';wrap.innerHTML='';return;}
+  if(!issues.length){st.className='status-row done';st.textContent='All controlled values valid across '+checkedRows+' row(s).';wrap.innerHTML='';return;}
+  st.className='status-row error';st.textContent=issues.length+' issue(s) across '+checkedRows+' row(s) checked.';
+  const byTab={};issues.forEach(i=>{(byTab[i.tab]=byTab[i.tab]||[]).push(i);});
+  let html='';
+  for(const tab of Object.keys(byTab)){
+    let rows='';
+    for(const it of byTab[tab]){
+      const fix=suggestFix(it.value,it.allowed);
+      let sug;
+      if(fix)sug='<span class="f-val">did you mean <strong>'+esc(fix)+'</strong>?</span>';
+      else if(it.allowed.length<=15)sug='<span class="f-val empty">allowed: '+esc(it.allowed.join(', '))+'</span>';
+      else sug='<span class="f-val empty">'+it.allowed.length+' allowed values, e.g. '+esc(it.allowed.slice(0,4).join(', '))+'…</span>';
+      rows+='<tr><td class="f-name">row '+it.row+' · '+esc(it.sku)+'</td><td class="f-name">'+esc(it.field)+'</td><td class="f-val">'+esc(it.value.slice(0,44))+'</td><td>'+sug+'</td></tr>';
+    }
+    html+='<div class="result-card"><div class="result-header"><div class="result-title">'+esc(tab)+'</div><div class="result-meta">'+byTab[tab].length+' issue(s)</div></div><table class="fields">'+rows+'</table></div>';
+  }
+  html+='<div class="result-card"><div class="export-footer"><div class="export-footer-label">'+issues.length+' issues found</div><button class="btn-download" onclick="downloadValReport()">Download report</button></div></div>';
+  wrap.innerHTML=html; window._valIssues=issues;
+}
+function downloadValReport(){
+  const aoa=[['Tab','Row','Vendor Item #','Field','Invalid Value','Allowed Values']];
+  (window._valIssues||[]).forEach(i=>aoa.push([i.tab,i.row,i.sku,i.field,i.value,i.allowed.join(' | ')]));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Validation');XLSX.writeFile(wb,'REI_Validation_Report.xlsx');
 }
 
 // drag styling
