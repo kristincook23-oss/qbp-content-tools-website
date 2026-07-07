@@ -145,8 +145,8 @@ table.fields tr:last-child td{border-bottom:none}
 
   <div class="step-card">
     <div class="step-head"><div class="step-num">3</div><div class="step-label">Build</div></div>
-    <div class="opt-row"><input type="checkbox" id="enrich"><label for="enrich">Fill spec gaps from vendor sites (Claude web search)</label></div>
-    <div class="opt-sub">Off: Enterworks fields only, everything else flagged for manual entry. On: for each empty REI spec, Claude searches the UPC / part number, reads the vendor page, and returns a value plus its source link, marked <em>vendor — verify</em>.</div>
+    <div class="opt-row"><input type="checkbox" id="enrich"><label for="enrich">Enrich from vendor sites (Claude web search)</label></div>
+    <div class="opt-sub">Off: Enterworks content only, everything else flagged for manual entry. On: for each product, Claude searches the UPC / part number, fills empty controlled-spec fields with valid values, and adds up to 4 new consumer-facing feature bullets (use cases, rider benefits, brand voice) that are not already listed. Everything from the web is marked <em>vendor — verify</em> with a source link.</div>
     <div class="gen-row">
       <button class="btn-run" id="runBtn" onclick="run()" disabled>Build Template</button>
       <button class="btn-clear-link" id="clearBtn" onclick="clearAll()">Clear all</button>
@@ -285,7 +285,7 @@ function mapDeterministic(){
     for(const [ci,field] of headers){
       if(field==='REI Item #') cells[ci]={field,value:reqData[vi].reiItem,src:'ok',note:'REI request'};
       else if(UNIVERSAL_MAP[field]){const [k,s]=UNIVERSAL_MAP[field];const v=transform(k,s,ew);cells[ci]={field,value:v,src:v!=null?'ok':'rev',note:'Enterworks: '+s};}
-      else if(/^Feature \d+$/.test(field)){const n=parseInt(field.split(' ')[1])-1;cells[ci]={field,value:n<feats.length?feats[n]:null,src:n<feats.length?'ok':'rev',note:'Enterworks bullet'};}
+      else if(/^Feature \d+$/.test(field)){const n=parseInt(field.split(' ')[1])-1;if(n<feats.length)cells[ci]={field,value:feats[n],src:'ok',note:'Enterworks bullet'};}
       else cells[ci]={field,value:null,src:'rev',note:'spec',allowed:allowed[field]||null};
     }
     out.push({vi,reiItem:reqData[vi].reiItem,ew,cells,headers,tab});
@@ -294,31 +294,51 @@ function mapDeterministic(){
 }
 
 // ---------- vendor enrichment via Claude web search ----------
-function buildEnrichPrompt(ew,needed){
+function buildEnrichPrompt(ew,needed,existingFeatures,leadDesc){
   const id=[`Brand: ${ew['Brand name']||''}`,`Product name: ${ew['Name']||''}`,`Manufacturer part #: ${ew['Manufacturer Part Number']||''}`,`UPC: ${ew['UPC Value']||''}`].join('\n');
-  const fieldLines=needed.map(n=>n.allowed&&n.allowed.length?`- "${n.field}" (must be one of: ${n.allowed.join(' | ')})`:`- "${n.field}" (short value)`).join('\n');
-  return `You are filling a retail product spec sheet for REI. This content is consumer-facing and is reviewed by REI copywriters, so prefer the brand's own consumer product page as your source and match the wording the brand uses. Find the exact product below on the manufacturer or an authorized retailer page using its UPC or part number, then return values for the requested fields ONLY if you can confirm them from a real page.
+  const existing=(existingFeatures||[]).map(b=>'- '+b).join('\n')||'(none)';
+  const specSection=needed.length
+    ? needed.map(n=>n.allowed&&n.allowed.length?`- "${n.field}" (must be one of: ${n.allowed.join(' | ')})`:`- "${n.field}"`).join('\n')
+    : '(none needed)';
+  return `You are enriching a product listing for REI. This content is consumer-facing and is reviewed by REI copywriters, so use REI's warm, benefit-driven voice. Find the exact product below on the brand's own consumer page or an authorized retailer using its UPC or part number. The UPC is the strongest identifier; match the exact size/variant.
 
 PRODUCT:
 ${id}
 
-FIELDS NEEDED:
-${fieldLines}
+ALREADY LISTED (do NOT repeat any of these, and do not restate specs that live in their own columns like materials, dimensions, weight, part numbers, or speeds):
+${existing}
+Marketing description: ${leadDesc||'(none)'}
 
-Rules:
-- Match the EXACT product (right size/variant). The UPC is the strongest identifier.
-- For fields with an allowed list, return one of those exact strings, or omit the field if none fit.
-- Omit any field you cannot confirm. Do not guess.
-- Reply with ONLY a JSON object, no prose. Shape: {"FieldName":{"value":"...","source":"https://..."}}`;
+TASK 1 - SPEC FIELDS: return the correct value for each field below ONLY if you can confirm it from a real page. For fields with an allowed list, return one of those exact strings, or omit the field.
+${specSection}
+
+TASK 2 - NEW CONSUMER FEATURES: suggest up to 4 NEW feature bullets that are not already listed above. Focus on use cases, rider or user benefits, and brand-story or consumer-friendly angles, one short sentence each. Do NOT restate specs and do NOT repeat anything already listed. If the product is already well described, return fewer or an empty list. Only include points you can support from a real product page.
+
+Reply with ONLY this JSON, no prose:
+{"specs":{"FieldName":{"value":"...","source":"https://..."}},"new_features":["...","..."],"source":"https://..."}`;
 }
-async function enrichProduct(apiKey,ew,needed){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
+async function enrichProduct(apiKey,ew,needed,existingFeatures,leadDesc){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed,existingFeatures,leadDesc)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
   const data=await res.json();
   const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
   const m=text.replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
-  if(!m)return {};
-  try{return JSON.parse(m[0]);}catch(e){return {};}
+  if(!m)return {specs:{},new_features:[]};
+  try{const j=JSON.parse(m[0]);return {specs:j.specs||{},new_features:Array.isArray(j.new_features)?j.new_features:[],source:j.source||''};}catch(e){return {specs:{},new_features:[]};}
+}
+function normBullet(s){return String(s).toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim();}
+function isNearDup(v,existingNorms){
+  const nv=normBullet(v); if(!nv)return true;
+  const vt=new Set(nv.split(' '));
+  for(const en of existingNorms){
+    if(en===nv)return true;
+    if(en.includes(nv)||nv.includes(en))return true;
+    const et=new Set(en.split(' '));
+    const inter=[...vt].filter(w=>et.has(w)).length;
+    const uni=new Set([...vt,...et]).size;
+    if(uni&&inter/uni>=0.8)return true;   // very similar wording
+  }
+  return false;
 }
 
 // ---------- run ----------
@@ -338,13 +358,31 @@ async function run(){
       const p=products[i];
       setStatus(`Vendor lookup ${i+1} of ${products.length}…`,'running');
       document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
-      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.field!=='Sustainability').map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
-      if(needed.length){
+      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.allowed&&c.allowed.length).map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
+      // existing bullets (for the prompt + dedup) and empty feature columns to fill
+      const hmap=Object.fromEntries(p.headers);
+      const existingFeatures=Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>String(c.value).trim());
+      const leadCi=p.headers.find(([,f])=>f==='Lead Marketing Description');
+      const leadDesc=leadCi&&p.cells[leadCi[0]]?p.cells[leadCi[0]].value:'';
+      const emptyFeatureCols=p.headers.filter(([ci,f])=>/^Feature \d+$/.test(f)&&!p.cells[ci]).sort((a,b)=>parseInt(a[1].split(' ')[1])-parseInt(b[1].split(' ')[1]));
+      if(needed.length||emptyFeatureCols.length){
         try{
-          const found=await enrichProduct(apiKey,p.ew,needed);
+          const found=await enrichProduct(apiKey,p.ew,needed,existingFeatures,leadDesc);
+          // spec fields
           for(const n of needed){
-            const hit=found[n.field];
-            if(hit&&hit.value){p.cells[n.ci].value=hit.value;p.cells[n.ci].src='vend';p.cells[n.ci].note='vendor — verify';p.cells[n.ci].link=hit.source||'';}
+            const hit=found.specs&&found.specs[n.field];
+            if(hit&&hit.value){p.cells[n.ci].value=hit.value;p.cells[n.ci].src='vend';p.cells[n.ci].note='vendor — verify';p.cells[n.ci].link=hit.source||found.source||'';}
+          }
+          // consumer-facing bullets into empty feature slots, deduped, capped at 4
+          const existingNorms=existingFeatures.map(normBullet);
+          let slot=0, added=0;
+          for(const nf of (found.new_features||[])){
+            if(added>=4||slot>=emptyFeatureCols.length)break;
+            const v=String(nf||'').trim(); if(!v)continue;
+            if(isNearDup(v,existingNorms))continue;
+            const [ci,field]=emptyFeatureCols[slot++];
+            p.cells[ci]={field,value:v,src:'vend',note:'vendor consumer copy — verify',link:found.source||''};
+            existingNorms.push(normBullet(v)); added++;
           }
         }catch(e){setStatus('Vendor lookup error: '+e.message,'error');}
       }
