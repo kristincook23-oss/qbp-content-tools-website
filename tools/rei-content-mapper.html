@@ -6,7 +6,8 @@
 <title>QBP × REI Content Mapper</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fflate/0.8.2/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+<script>window.fflate||document.write('<script src="https://unpkg.com/fflate@0.8.2/umd/index.js"><\/script>');</script>
 <style>
 :root {
   --bg:#ede9e1; --surface:#fff; --surface2:#f7f5f1; --border:#ddd8cf; --border-light:#ece8e0;
@@ -171,6 +172,30 @@ table.fields tr:last-child td{border-bottom:none}
     <div id="valResults" style="margin-top:18px;display:flex;flex-direction:column;gap:14px"></div>
   </div>
 
+  <div class="step-card">
+    <div class="step-head"><div class="step-num">✓</div><div class="step-label">Check coverage (optional)</div></div>
+    <div class="opt-sub" style="margin:-4px 0 16px 0">Give it the REI request plus every template you have filled so far. It reconciles each requested SKU as placed (and in which tab) or still needing a home. Runs in the browser, no API key.</div>
+    <div class="file-grid" style="grid-template-columns:1fr 1fr">
+      <div>
+        <div class="file-cap">REI request</div>
+        <div class="drop" id="dropCovReq"><input type="file" accept=".xlsx,.xls" onchange="loadCovReq(this.files[0])">
+          <div class="drop-icon">📋</div><div class="drop-label"><strong>REI request</strong></div>
+          <span class="drop-formats">.xlsx</span><div class="drop-success" id="okCovReq"></div></div>
+      </div>
+      <div>
+        <div class="file-cap">Filled template(s)</div>
+        <div class="drop" id="dropCovTpl"><input type="file" accept=".xlsx,.xls" multiple onchange="loadCovTpl(this.files)">
+          <div class="drop-icon">🎯</div><div class="drop-label"><strong>Filled template(s)</strong> (multiple ok)</div>
+          <span class="drop-formats">.xlsx</span><div class="drop-success" id="okCovTpl"></div></div>
+      </div>
+    </div>
+    <div class="gen-row" style="margin-top:16px">
+      <button class="btn-run" id="covBtn" onclick="checkCoverage()" disabled>Check Coverage</button>
+      <div class="status-row" id="covStatus"></div>
+    </div>
+    <div id="covResults" style="margin-top:18px;display:flex;flex-direction:column;gap:14px"></div>
+  </div>
+
 </div>
 
 <script>
@@ -178,7 +203,7 @@ const LB_TO_G = 453.592;
 const UNIVERSAL_MAP = {
   'Vendor Item #':['copy','SKU'], 'Brand':['copy','Brand name'],
   'Customer-Facing Name':['copy','Name'], 'Lead Marketing Description':['copy','Model Description'],
-  'Weight':['weight_disp','Weight'], 'Weight (g)':['weight_g','Weight'],
+  'Weight':['weight_lbs','Weight'], 'Weight (g)':['weight_g','Weight'],
 };
 const FEATURE_SOURCES = ['Model Bullet Text','SKU Bullet Text'];
 const RESERVED_TABS = ['Instructions','templateUuid','Specifications','Specifications Mapping'];
@@ -215,26 +240,36 @@ function toGrams(ew){
   return Math.round(n*mult);
 }
 function transform(kind,src,ew){
-  if(kind==='weight_disp'){const g=toGrams(ew);return g==null?null:g+' g';}
+  if(kind==='weight_lbs'){
+    const raw=ew['Weight']; if(raw==null||String(raw).trim()==='')return null;
+    const n=parseFloat(String(raw).trim()); if(isNaN(n))return null;
+    const uom=String(ew['Weight UOM']||'LB').trim().toUpperCase();
+    let lbs;
+    if(uom==='LB'||uom==='LBS') lbs=n;                 // Enterworks already in pounds, keep as-is
+    else { const g=toGrams(ew); lbs=g==null?null:Math.round(g/453.592*100)/100; }
+    return lbs==null?null:lbs+' lbs.';
+  }
   if(kind==='weight_g'){const g=toGrams(ew);return g==null?null:String(g);}
   let raw=ew[src];if(raw==null||String(raw).trim()==='')return null;raw=String(raw).trim();
   if(kind==='copy')return raw;
   return raw;
 }
 function buildFeatures(ew){
-  const f=[];
-  for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(x=>{if(x.trim())f.push(x.trim());});}
+  const f=[], seen=new Set();
+  const add=t=>{const v=String(t).trim();if(!v)return;const key=v.toLowerCase().replace(/\s+/g,' ');if(seen.has(key))return;seen.add(key);f.push(v);};
+  // marketing bullets, de-duplicated (same text can appear in both Model and SKU bullet fields)
+  for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(add);}
   // REI VIF rule: include MPN + UPC as a bullet
   const mpn=ew['Manufacturer Part Number'], upc=ew['UPC Value'];
   if((mpn&&String(mpn).trim())||(upc&&String(upc).trim())){
     const parts=[];
     if(mpn&&String(mpn).trim())parts.push('Manufacturer Part Number: '+String(mpn).trim());
     if(upc&&String(upc).trim())parts.push('UPC: '+String(upc).trim());
-    f.push(parts.join(' / '));
+    add(parts.join(' / '));
   }
   // REI VIF rule: include Prop 65 warning as a bullet when present
   const prop=ew['Prop 65 Text'];
-  if(prop&&String(prop).trim())f.push(String(prop).trim());
+  if(prop&&String(prop).trim())add(String(prop).trim());
   return f;
 }
 
@@ -470,6 +505,57 @@ function downloadValReport(){
   const aoa=[['Tab','Row','Vendor Item #','Field','Invalid Value','Allowed Values']];
   (window._valIssues||[]).forEach(i=>aoa.push([i.tab,i.row,i.sku,i.field,i.value,i.allowed.join(' | ')]));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Validation');XLSX.writeFile(wb,'REI_Validation_Report.xlsx');
+}
+
+// ---------- coverage: reconcile request SKUs against filled templates ----------
+let covReqData=null, covTemplates=[];
+async function loadCovReq(f){if(!f)return;const wb=XLSX.read(await f.arrayBuffer());const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());const gi=n=>hdr.indexOf(n);const vi=gi('Vendor Item #'),ri=gi('REI Item #'),di=gi('Description');covReqData=[];for(let r=1;r<rows.length;r++){const s=rows[r][vi];if(s==null||!String(s).trim())continue;covReqData.push({sku:String(s).trim(),rei:ri>=0?String(rows[r][ri]||'').trim():'',desc:di>=0?String(rows[r][di]||'').trim():''});}document.getElementById('okCovReq').textContent='✓ '+covReqData.length+' request SKUs';covMaybe();}
+async function loadCovTpl(files){if(!files.length)return;covTemplates=[];for(const f of files){covTemplates.push({name:f.name,wb:XLSX.read(await f.arrayBuffer())});}document.getElementById('okCovTpl').textContent='✓ '+covTemplates.length+' file'+(covTemplates.length>1?'s':'');covMaybe();}
+function covMaybe(){document.getElementById('covBtn').disabled=!(covReqData&&covTemplates.length);}
+function checkCoverage(){
+  const placements={};
+  for(const {name,wb} of covTemplates){
+    const prod=wb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));
+    for(const tab of prod){
+      const rows=rowsOf(wb,tab);
+      for(let r=4;r<rows.length;r++){const row=rows[r];if(!row)continue;const sku=row[0]==null?'':String(row[0]).trim();if(!sku||sku==='ABK32')continue;(placements[sku]=placements[sku]||[]).push({file:name,tab});}
+    }
+  }
+  const reqSet=new Set(covReqData.map(x=>x.sku));
+  const placed=[],missing=[],dupes=[],extras=[];
+  for(const item of covReqData){
+    const locs=placements[item.sku]||[];
+    if(!locs.length)missing.push(item);
+    else{placed.push({item,locs});if(locs.length>1)dupes.push({item,locs});}
+  }
+  for(const sku of Object.keys(placements))if(!reqSet.has(sku))extras.push({sku,locs:placements[sku]});
+  renderCoverage(placed,missing,dupes,extras);
+}
+function renderCoverage(placed,missing,dupes,extras){
+  const wrap=document.getElementById('covResults'),st=document.getElementById('covStatus');
+  const total=placed.length+missing.length;
+  st.className='status-row '+(missing.length?'error':'done');
+  st.textContent=missing.length?(missing.length+' of '+total+' request SKUs not yet placed.'):('All '+total+' request SKUs placed.');
+  let html='<div class="summary"><span class="chip ok">'+placed.length+' placed</span><span class="chip rev">'+missing.length+' not placed</span>'+(dupes.length?'<span class="chip vend">'+dupes.length+' in 2+ tabs</span>':'')+(extras.length?'<span class="chip">'+extras.length+' extra</span>':'')+'</div>';
+  if(missing.length){
+    const rows=missing.map(m=>'<tr><td class="f-name">'+esc(m.sku)+'</td><td class="f-val">'+esc(m.desc||'')+'</td><td class="f-src"><span class="badge rev">NEEDS A TAB</span></td></tr>').join('');
+    html+='<div class="result-card"><div class="result-header"><div class="result-title">Still to place</div><div class="result-meta">'+missing.length+' SKU(s)</div></div><table class="fields">'+rows+'</table></div>';
+  }
+  const prows=placed.map(p=>'<tr><td class="f-name">'+esc(p.item.sku)+'</td><td class="f-val">'+esc(p.item.desc||'')+'</td><td class="f-src">'+p.locs.map(l=>'<span class="badge ok">'+esc(l.tab)+'</span>').join(' ')+'</td></tr>').join('');
+  if(placed.length)html+='<div class="result-card"><div class="result-header"><div class="result-title">Placed</div><div class="result-meta">'+placed.length+' SKU(s)</div></div><table class="fields">'+prows+'</table></div>';
+  if(extras.length){
+    const erows=extras.map(e=>'<tr><td class="f-name">'+esc(e.sku)+'</td><td class="f-val empty">not on the request</td><td class="f-src">'+e.locs.map(l=>'<span class="badge vend">'+esc(l.tab)+'</span>').join(' ')+'</td></tr>').join('');
+    html+='<div class="result-card"><div class="result-header"><div class="result-title">In a template but not on the request</div><div class="result-meta">'+extras.length+'</div></div><table class="fields">'+erows+'</table></div>';
+  }
+  html+='<div class="result-card"><div class="export-footer"><div class="export-footer-label">Coverage report</div><button class="btn-download" onclick="downloadCovReport()">Download report</button></div></div>';
+  wrap.innerHTML=html;window._cov={placed,missing,dupes,extras};
+}
+function downloadCovReport(){
+  const c=window._cov||{};const aoa=[['SKU','Description','Status','Location(s)']];
+  (c.placed||[]).forEach(p=>aoa.push([p.item.sku,p.item.desc||'',p.locs.length>1?'Placed (in multiple tabs)':'Placed',p.locs.map(l=>l.file+' / '+l.tab).join('; ')]));
+  (c.missing||[]).forEach(m=>aoa.push([m.sku,m.desc||'','NOT PLACED','']));
+  (c.extras||[]).forEach(e=>aoa.push([e.sku,'(not on request)','Extra',e.locs.map(l=>l.file+' / '+l.tab).join('; ')]));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'Coverage');XLSX.writeFile(wb,'REI_Coverage_Report.xlsx');
 }
 
 // drag styling
