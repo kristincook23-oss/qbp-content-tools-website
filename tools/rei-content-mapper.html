@@ -141,6 +141,14 @@ table.fields tr:last-child td{border-bottom:none}
       <label>Category tab:</label>
       <select id="tabSelect"></select>
     </div>
+    <div id="skuPick" style="display:none;margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span class="file-cap" style="margin:0">SKUs to place on this template</span>
+        <span><button class="btn-show" onclick="skuAll(true)">All</button> <button class="btn-show" onclick="skuAll(false)">None</button></span>
+      </div>
+      <div id="skuList" style="max-height:220px;overflow:auto;border:1px solid var(--border);background:var(--surface2)"></div>
+      <div class="hint" style="margin-top:6px">Only checked SKUs get written to this template. Run once per template, checking just the SKUs that belong on it.</div>
+    </div>
   </div>
 
   <div class="step-card">
@@ -218,14 +226,25 @@ function maybeEnable(){document.getElementById('runBtn').disabled=!(reqData&&ewD
 function readBuf(file){return file.arrayBuffer();}
 
 // ---------- loaders ----------
-async function loadReq(f){if(!f)return;const wb=XLSX.read(await readBuf(f));reqData=parseRequest(wb);document.getElementById('okReq').textContent='✓ '+Object.keys(reqData).length+' items';maybeEnable();}
-async function loadEw(files){if(!files.length)return;ewData={};let n=0;for(const f of files){const wb=XLSX.read(await readBuf(f));n+=mergeEnterworks(wb,ewData);}document.getElementById('okEw').textContent='✓ '+Object.keys(ewData).length+' SKUs ('+files.length+' file'+(files.length>1?'s':'')+')';maybeEnable();}
+async function loadReq(f){if(!f)return;const wb=XLSX.read(await readBuf(f));reqData=parseRequest(wb);document.getElementById('okReq').textContent='✓ '+Object.keys(reqData).length+' items';renderSkuPick();maybeEnable();}
+async function loadEw(files){if(!files.length)return;ewData={};let n=0;for(const f of files){const wb=XLSX.read(await readBuf(f));n+=mergeEnterworks(wb,ewData);}document.getElementById('okEw').textContent='✓ '+Object.keys(ewData).length+' SKUs ('+files.length+' file'+(files.length>1?'s':'')+')';renderSkuPick();maybeEnable();}
+function renderSkuPick(){
+  const pick=document.getElementById('skuPick');
+  if(!reqData||!ewData){pick.style.display='none';return;}
+  const skus=Object.keys(reqData).filter(s=>ewData[s]);
+  if(!skus.length){pick.style.display='none';return;}
+  const rows=skus.map(s=>`<label style="display:flex;gap:9px;align-items:baseline;padding:7px 12px;border-bottom:1px solid var(--border-light);font-size:13px;cursor:pointer"><input type="checkbox" class="sku-cb" value="${esc(s)}" checked style="accent-color:var(--accent)"><span style="font-family:var(--mono);font-size:12px">${esc(s)}</span><span style="color:var(--muted)">${esc(reqData[s].desc||'')}</span></label>`).join('');
+  document.getElementById('skuList').innerHTML=rows;
+  pick.style.display='block';
+}
+function skuAll(v){document.querySelectorAll('.sku-cb').forEach(c=>c.checked=v);}
+function selectedSkus(){const s=new Set();document.querySelectorAll('.sku-cb:checked').forEach(c=>s.add(c.value));return s;}
 async function loadTpl(f){if(!f)return;tplName=f.name||'template';tplBuf=await readBuf(f);tplWb=XLSX.read(tplBuf);const tabs=tplWb.SheetNames.filter(s=>!RESERVED_TABS.includes(s));const sel=document.getElementById('tabSelect');sel.innerHTML=tabs.map(t=>`<option>${t}</option>`).join('');document.getElementById('tabRow').classList.add('visible');document.getElementById('okTpl').textContent='✓ '+tabs.length+' categories';sel.onchange=maybeEnable;maybeEnable();}
-function clearAll(){reqData=ewData=tplBuf=tplWb=lastResults=null;['okReq','okEw','okTpl'].forEach(i=>document.getElementById(i).textContent='');document.getElementById('tabRow').classList.remove('visible');document.getElementById('results').innerHTML='';setStatus('');maybeEnable();}
+function clearAll(){reqData=ewData=tplBuf=tplWb=lastResults=null;['okReq','okEw','okTpl'].forEach(i=>document.getElementById(i).textContent='');document.getElementById('tabRow').classList.remove('visible');document.getElementById('skuPick').style.display='none';document.getElementById('results').innerHTML='';setStatus('');maybeEnable();}
 
 function rowsOf(wb,name){return XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,defval:null,raw:false});}
 
-function parseRequest(wb){const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());const idx={};hdr.forEach((h,i)=>idx[h]=i);const out={};for(let r=1;r<rows.length;r++){const vi=rows[r][idx['Vendor Item #']];if(vi==null)continue;out[String(vi).trim()]={reiItem:rows[r][idx['REI Item #']],brand:rows[r][idx['Brand']],dept:rows[r][idx['REI Dept']]};}return out;}
+function parseRequest(wb){const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());const idx={};hdr.forEach((h,i)=>idx[h]=i);const out={};for(let r=1;r<rows.length;r++){const vi=rows[r][idx['Vendor Item #']];if(vi==null)continue;out[String(vi).trim()]={reiItem:rows[r][idx['REI Item #']],brand:rows[r][idx['Brand']],dept:rows[r][idx['REI Dept']],desc:idx['Description']!=null?String(rows[r][idx['Description']]||'').trim():''};}return out;}
 function mergeEnterworks(wb,out){const rows=rowsOf(wb,wb.SheetNames[0]);const hdr=rows[0].map(h=>h==null?'':String(h).trim());let n=0;for(let r=1;r<rows.length;r++){const rec={};hdr.forEach((h,i)=>rec[h]=rows[r][i]);const sku=rec['SKU'];if(sku&&String(sku).trim()&&String(sku).trim()!=='SKU'){out[String(sku).trim()]=rec;n++;}}return n;}
 
 function loadAllowed(wb,tab){const mp=rowsOf(wb,'Specifications Mapping');const uf={};(mp[0]||[]).forEach((u,i)=>{if(u&&mp[1]&&mp[1][i])uf[String(u).trim()]=String(mp[1][i]).trim();});const sp=rowsOf(wb,'Specifications');const out={};(sp[0]||[]).forEach((h,ci)=>{if(!h)return;const m=String(h).trim().match(/^(.*)-([0-9a-f-]{36})$/);if(!m||m[1]!==tab)return;const field=uf[m[2]];if(!field)return;const vals=[];for(let r=1;r<sp.length;r++){const v=sp[r][ci];if(v!=null&&String(v).trim())vals.push(String(v).trim());}out[field]=vals;});return out;}
@@ -279,8 +298,10 @@ function mapDeterministic(){
   const headers=templateHeaders(tplWb,tab);
   const allowed=loadAllowed(tplWb,tab);
   const out=[];
+  const pick=selectedSkus();
   for(const vi of Object.keys(reqData)){
     if(!ewData[vi])continue;
+    if(pick.size&&!pick.has(vi))continue;
     const ew=ewData[vi], feats=buildFeatures(ew), cells={};
     for(const [ci,field] of headers){
       if(field==='REI Item #') cells[ci]={field,value:reqData[vi].reiItem,src:'ok',note:'REI request'};
