@@ -286,6 +286,7 @@ function mapDeterministic(){
       if(field==='REI Item #') cells[ci]={field,value:reqData[vi].reiItem,src:'ok',note:'REI request'};
       else if(UNIVERSAL_MAP[field]){const [k,s]=UNIVERSAL_MAP[field];const v=transform(k,s,ew);cells[ci]={field,value:v,src:v!=null?'ok':'rev',note:'Enterworks: '+s};}
       else if(/^Feature \d+$/.test(field)){const n=parseInt(field.split(' ')[1])-1;if(n<feats.length)cells[ci]={field,value:feats[n],src:'ok',note:'Enterworks bullet'};}
+      else if(field==='Best Use'){const al=allowed['Best Use']||[];if(al.includes('Cycling'))cells[ci]={field,value:'Cycling',src:'ok',note:'default: Cycling'};else cells[ci]={field,value:null,src:'rev',note:'spec (Cycling not offered here)',allowed:al};}
       else cells[ci]={field,value:null,src:'rev',note:'spec',allowed:allowed[field]||null};
     }
     out.push({vi,reiItem:reqData[vi].reiItem,ew,cells,headers,tab});
