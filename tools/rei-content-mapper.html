@@ -310,7 +310,7 @@ ALREADY LISTED (do NOT repeat any of these, and do not restate specs that live i
 ${existing}
 Marketing description: ${leadDesc||'(none)'}
 
-TASK 1 - SPEC FIELDS: return the correct value for each field below ONLY if you can confirm it from a real page. For fields with an allowed list, return one of those exact strings, or omit the field.
+TASK 1 - SPEC FIELDS: fill each field below. Take the value from the product's own bullets and description listed above when it is there (for example a "Height adjustable from..." bullet fills a height field, a "steel and composite construction" bullet fills a materials field), otherwise confirm it from a real product page. For fields with an allowed list, return one of those exact strings or omit. For free-text fields such as materials or dimensions, return a short, clean value. Omit any field you cannot support.
 ${specSection}
 
 TASK 2 - NEW CONSUMER FEATURES: suggest up to 4 NEW feature bullets that are not already listed above. Focus on use cases, rider or user benefits, and brand-story or consumer-friendly angles, one short sentence each. Do NOT restate specs and do NOT repeat anything already listed. If the product is already well described, return fewer or an empty list. Only include points you can support from a real product page.
@@ -359,7 +359,7 @@ async function run(){
       const p=products[i];
       setStatus(`Vendor lookup ${i+1} of ${products.length}…`,'running');
       document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
-      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.allowed&&c.allowed.length).map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
+      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.note&&c.note.indexOf('spec')===0).map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
       // existing bullets (for the prompt + dedup) and empty feature columns to fill
       const hmap=Object.fromEntries(p.headers);
       const existingFeatures=Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>String(c.value).trim());
