@@ -450,7 +450,8 @@ function clearAll() {
   setStatus('');
 }
 
-function buildPrompt(source, includeFaqs = true) {
+function buildPrompt(source, includeFaqs = true, inputSkus = null) {
+  const skuList = (inputSkus || []).map(s => String(s || '').trim()).filter(Boolean);
   return `You are a product content specialist for QBP (Quality Bicycle Products), and for the Rich Content section you are acting as the QBP Rich Content Builder. Given vendor product information, generate structured content for Enterworks PIM import.
 
 For each product, output EXACTLY these labeled sections in order. Use plain text labels (no markdown headers, no asterisks, no bold):
@@ -466,11 +467,11 @@ MODEL BULLETS:
 2. [Bullet two]
 3. [Continue as needed — typically 4–7 bullets]
 SKU BULLETS:
-[If SKUs have meaningful functional differences (e.g. bag capacity by size), list per-SKU bullets like:
+[Only list per-SKU bullets when SKUs have meaningful FUNCTIONAL differences (e.g. bag capacity by size) AND that SKU appears in the provided input. Format:
 SKU [sku or color/size]:
 1. Bullet
 2. Bullet
-Otherwise write: No SKU-level bullets]
+Do NOT create a SKU row for a size, length, or color that appears only in the vendor copy but is not in the input — those inherit the model bullets. Otherwise write: No SKU-level bullets]
 RICH CONTENT SUGGESTIONS:
 Block 1 — [Headline: short, punchy phrase — NO em-dash inside the headline itself]
 - Line one
@@ -516,6 +517,7 @@ Optimize all copy for AI and search discoverability. Begin the MODEL DESCRIPTION
 - Do not convert units unless the source provides both
 - Do not offer follow-up options or next steps after your output
 - SKU bullets only when SKUs have meaningful functional differences — size/color variants inherit model bullets
+- Never turn variants mentioned only in vendor marketing copy into SKU rows. When an input SKU / Material ID list is provided, generate SKU-level bullets ONLY for those exact SKUs; skip any other variant the vendor sells and note it under Review flag instead of creating a row.
 - If processing multiple products, repeat the labeled block for each, then append: BATCH SUMMARY: [N] products processed.
 - Consumer-safe means: no guaranteed safety outcome claims, no named competitor comparisons, no medical/health language, no age-specific targeting, no claims requiring a disclaimer. Paraphrase vendor claims that cross these lines into factual capability statements.
 
@@ -580,7 +582,12 @@ Once you've identified the product's category family, apply the corresponding to
 - Ebikes → Explanatory. Clearly define the product's role within the ebike system. Emphasize compatibility and system relationships.
 If the product doesn't fit one of these families, use best judgment based on the source content.
 
-Product source:
+${skuList.length ? `==== INPUT SKU LIST (authoritative) ====
+These are the ONLY SKUs / Material IDs QBP carries for this product. Generate SKU-level bullets for these and no others. Do NOT create SKU or variant rows for any size, length, color, or model variant that appears in the vendor copy but is not in this list — if you notice such variants, mention them once under Review flag instead of making rows.
+${skuList.map(s => '- ' + s).join('\n')}
+${skuList.length === 1 ? 'Only ONE SKU is provided. Output MODEL-level bullets only and write "No SKU-level bullets" in the SKU BULLETS section. Do NOT split this into multiple variant rows.' : ''}
+
+` : ''}Product source:
 ${source}`;
 }
 
@@ -768,7 +775,7 @@ async function runBatch() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 8000,
-          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked) }],
+          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked, row.materialId ? [row.materialId] : null) }],
         }),
       });
 
@@ -782,7 +789,10 @@ async function runBatch() {
       const text = data.content?.[0]?.text || '';
       const products = parseOutput(text);
       products.forEach(p => { p.materialId = row.materialId; });
-      const flatRows = products.flatMap(p => p.rows).map(r => ({ ...r, materialId: row.materialId }));
+      // One spreadsheet row = one Material ID = one SKU, so it must export as exactly
+      // one row. If the model still split out per-variant SKU rows, collapse to the base
+      // (model) row so we never stamp the same Material ID onto duplicate rows.
+      const flatRows = products.map(p => ({ ...p.rows[0], materialId: row.materialId }));
       parsedProducts.push(...flatRows);
       products.forEach(p => {
         if (p.faqs) parsedFaqs.push(...p.faqs.map(f => ({ product: p.name || row.materialId, materialId: row.materialId, q: f.q, a: f.a })));
