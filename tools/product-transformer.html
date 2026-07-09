@@ -451,7 +451,10 @@ function clearAll() {
 }
 
 function buildPrompt(source, includeFaqs = true, inputSkus = null) {
-  const skuList = (inputSkus || []).map(s => String(s || '').trim()).filter(Boolean);
+  const skuList = (inputSkus || []).map(s => (s && typeof s === 'object')
+    ? { id: String(s.id || '').trim(), desc: String(s.desc || '').trim() }
+    : { id: String(s || '').trim(), desc: '' }
+  ).filter(s => s.id || s.desc);
   return `You are a product content specialist for QBP (Quality Bicycle Products), and for the Rich Content section you are acting as the QBP Rich Content Builder. Given vendor product information, generate structured content for Enterworks PIM import.
 
 For each product, output EXACTLY these labeled sections in order. Use plain text labels (no markdown headers, no asterisks, no bold):
@@ -461,17 +464,17 @@ NAME (Long Description): [Full product title in format: Brand Model Type, Spec 1
 BRAND: [Brand name only]
 TAXONOMY NODE: [Suggested category path e.g. Cycling > Computers > GPS — prefix with "Suggested — please confirm: "]
 MODEL CODE: [Model/part number if available, else leave blank]
-MODEL DESCRIPTION: [2–5 sentence paragraph. Begin with the full product name and brand. Use a problem-solution framing ("designed for riders who..."). Include category-relevant semantic terms and any commonly searched specs (e.g. "31.8mm handlebars") naturally in the text. Factual, dealer-ready, consumer-safe. No weak endings. Cut lines rather than pad with non-sourced copy. IMPORTANT: Determine the product's riding category and intended use from the product's own marketing description, page title, and navigation — never from component or feature names. A retention system named "Zoom Ace Urban" does not make the helmet urban-focused; a saddle with "Trail" in its clamp name is not necessarily a trail saddle.]
+MODEL DESCRIPTION: [2–5 sentence paragraph. Begin with the full product name and brand. Use a problem-solution framing ("designed for riders who..."). Include category-relevant semantic terms and any commonly searched specs (e.g. "31.8mm handlebars") naturally in the text. Factual, dealer-ready, consumer-safe. No weak endings. Cut lines rather than pad with non-sourced copy. KEEP IT GENERIC TO THE MODEL: describe purpose, materials, compatibility, and use case that apply to ANY variant. Do NOT enumerate specific sizes, lengths, colors, or other variant-only specs, even if the vendor copy lists several options — variant specifics belong in SKU BULLETS. Model-wide compatibility specs that are the same across variants (e.g. clamp diameter) are fine. IMPORTANT: Determine the product's riding category and intended use from the product's own marketing description, page title, and navigation — never from component or feature names. A retention system named "Zoom Ace Urban" does not make the helmet urban-focused; a saddle with "Trail" in its clamp name is not necessarily a trail saddle.]
 MODEL BULLETS:
-1. [Bullet one — one clean direct statement. No em-dashes.]
+1. [Bullet one — one clean direct statement. No em-dashes. Generic to the model — no variant-specific sizes, lengths, or colors.]
 2. [Bullet two]
 3. [Continue as needed — typically 4–7 bullets]
 SKU BULLETS:
-[Only list per-SKU bullets when SKUs have meaningful FUNCTIONAL differences (e.g. bag capacity by size) AND that SKU appears in the provided input. Format:
+[When the INPUT SKU LIST below is provided, write SKU bullets scoped to the exact variant that list's description identifies for each Material ID — the size, length, or color QBP actually carries. Cross-reference that variant against the vendor copy and write bullets only for details specific to it. Format:
 SKU [sku or color/size]:
 1. Bullet
 2. Bullet
-Do NOT create a SKU row for a size, length, or color that appears only in the vendor copy but is not in the input — those inherit the model bullets. Otherwise write: No SKU-level bullets]
+Without an input list, only write per-SKU bullets when SKUs have meaningful FUNCTIONAL differences (e.g. bag capacity by size). Never create a SKU group for a size, length, or color that appears only in the vendor copy but is not the carried variant — those details stay out. If there are no variant-specific details to add, write: No SKU-level bullets]
 RICH CONTENT SUGGESTIONS:
 Block 1 — [Headline: short, punchy phrase — NO em-dash inside the headline itself]
 - Line one
@@ -516,8 +519,8 @@ Optimize all copy for AI and search discoverability. Begin the MODEL DESCRIPTION
 - No filler phrases: "perfect for", "designed to", "built for", "ideal for", "innovative"
 - Do not convert units unless the source provides both
 - Do not offer follow-up options or next steps after your output
-- SKU bullets only when SKUs have meaningful functional differences — size/color variants inherit model bullets
-- Never turn variants mentioned only in vendor marketing copy into SKU rows. When an input SKU / Material ID list is provided, generate SKU-level bullets ONLY for those exact SKUs; skip any other variant the vendor sells and note it under Review flag instead of creating a row.
+- Keep model-level content (MODEL DESCRIPTION and MODEL BULLETS) generic to the whole model. Push all variant-specific detail (size, length, color) into SKU BULLETS, never the model sections.
+- When an input SKU / Material ID list is provided, use each entry's description to identify the exact carried variant and write SKU bullets only for that variant. Skip any other variant the vendor sells and note it once under Review flag instead of creating a row.
 - If processing multiple products, repeat the labeled block for each, then append: BATCH SUMMARY: [N] products processed.
 - Consumer-safe means: no guaranteed safety outcome claims, no named competitor comparisons, no medical/health language, no age-specific targeting, no claims requiring a disclaimer. Paraphrase vendor claims that cross these lines into factual capability statements.
 
@@ -583,9 +586,13 @@ Once you've identified the product's category family, apply the corresponding to
 If the product doesn't fit one of these families, use best judgment based on the source content.
 
 ${skuList.length ? `==== INPUT SKU LIST (authoritative) ====
-These are the ONLY SKUs / Material IDs QBP carries for this product. Generate SKU-level bullets for these and no others. Do NOT create SKU or variant rows for any size, length, color, or model variant that appears in the vendor copy but is not in this list — if you notice such variants, mention them once under Review flag instead of making rows.
-${skuList.map(s => '- ' + s).join('\n')}
-${skuList.length === 1 ? 'Only ONE SKU is provided. Output MODEL-level bullets only and write "No SKU-level bullets" in the SKU BULLETS section. Do NOT split this into multiple variant rows.' : ''}
+These are the ONLY SKUs / Material IDs QBP carries for this product. Each entry's description identifies the EXACT variant (size, length, color, etc.) QBP carries — this is your source of truth for which variant to write SKU bullets about:
+${skuList.map(s => `- ${s.id || '(no id)'}${s.desc ? ` — ${s.desc}` : ''}`).join('\n')}
+
+How to use this list:
+- MODEL DESCRIPTION and MODEL BULLETS: generic to the model. Do not enumerate any variant's specific size, length, or color, even if the vendor copy lists several.
+- SKU BULLETS: for each entry above, read its description to pin down the carried variant, cross-reference it against the vendor copy, and write bullets only for that variant's specific details. Do NOT write bullets for other sizes, lengths, or colors in the vendor copy that are not in this list — mention such extra variants once under Review flag instead.
+${skuList.length === 1 ? 'Exactly ONE SKU is provided: output ONE product with generic model content plus SKU bullets for that single carried variant. Do not split into multiple variant rows.' : ''}
 
 ` : ''}Product source:
 ${source}`;
@@ -775,7 +782,7 @@ async function runBatch() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 8000,
-          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked, row.materialId ? [row.materialId] : null) }],
+          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked, (row.materialId || row.shortDesc) ? [{ id: row.materialId, desc: row.shortDesc }] : null) }],
         }),
       });
 
@@ -789,10 +796,20 @@ async function runBatch() {
       const text = data.content?.[0]?.text || '';
       const products = parseOutput(text);
       products.forEach(p => { p.materialId = row.materialId; });
-      // One spreadsheet row = one Material ID = one SKU, so it must export as exactly
-      // one row. If the model still split out per-variant SKU rows, collapse to the base
-      // (model) row so we never stamp the same Material ID onto duplicate rows.
-      const flatRows = products.map(p => ({ ...p.rows[0], materialId: row.materialId }));
+      // One spreadsheet row = one Material ID = one carried variant, so it must export as
+      // exactly one row. Take the base (model) row and merge in the carried variant's SKU
+      // bullets so both model and SKU bullet columns land on that single row — never
+      // stamping the same Material ID onto duplicate rows.
+      const flatRows = products.map(p => {
+        const base = { ...p.rows[0], materialId: row.materialId };
+        const skuRow = p.rows.find(r => r.skuBulletText);
+        if (skuRow) {
+          base.sku = base.sku || skuRow.sku;
+          base.skuBulletText = skuRow.skuBulletText;
+          base.skuBulletOrder = skuRow.skuBulletOrder;
+        }
+        return base;
+      });
       parsedProducts.push(...flatRows);
       products.forEach(p => {
         if (p.faqs) parsedFaqs.push(...p.faqs.map(f => ({ product: p.name || row.materialId, materialId: row.materialId, q: f.q, a: f.a })));
