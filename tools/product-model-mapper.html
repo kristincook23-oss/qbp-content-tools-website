@@ -215,7 +215,7 @@
           <div class="zone-hint">
             Drop .xlsx here or click to browse.<br>
             Needs: Part Number (or QBP Prefix/Part Number, Material ID)<br>
-            + Description (or SAP Short Description). Brand optional.
+            + Description (or Name / SAP Short Description). Brand optional.
           </div>
           <div class="zone-file-info hidden" id="zone1Info"></div>
         </div>
@@ -377,7 +377,7 @@ function processSkuFile(data) {
   skuCols = {
     matId:   findCol(headers, ['material id', 'mat id', 'materialid', 'mat_id', 'qbp prefix', 'qbp part', 'part number', 'part no', 'sku']),
     vendor:  findCol(headers, ['vendor part', 'part #', 'part#', 'vpn', 'vendor_part', 'supplier part']),
-    desc:    findCol(headers, ['short description', 'short desc', 'sap short', 'description', 'desc']),
+    desc:    findCol(headers, ['short description', 'short desc', 'sap short', 'long description', 'description', 'desc', 'product name', 'name', 'title']),
     brand:   findCol(headers, ['brand', 'sales material group 1'])
   };
   if (skuCols.matId === -1 || skuCols.desc === -1) {
@@ -393,7 +393,7 @@ function processCatalogFile(data) {
   const headers = data[0].map(h => String(h || ''));
   catCols = {
     matId:  findCol(headers, ['material id', 'mat id', 'materialid']),
-    desc:   findCol(headers, ['short description', 'short desc', 'description']),
+    desc:   findCol(headers, ['short description', 'short desc', 'long description', 'description', 'desc', 'product name', 'name', 'title']),
     model:  findCol(headers, ['model code']),
     modelD: findCol(headers, ['model description']),
     brand:  findCol(headers, ['brand']),
