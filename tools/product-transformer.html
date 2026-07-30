@@ -1077,11 +1077,15 @@ function parseBlock(block) {
   if (!name && !brand) return null;
 
   // Strip em-dashes from bullets — enforced in code regardless of Claude's output
+  // Also strip any trailing period — model/SKU bullets never end with a period
   function cleanBullet(b) {
-    if (!b.includes(' — ')) return b;
-    const [first, ...rest] = b.split(' — ');
-    const second = rest.join(' — ').trim();
-    return first.trim() + ', ' + second.charAt(0).toLowerCase() + second.slice(1);
+    let out = b;
+    if (out.includes(' — ')) {
+      const [first, ...rest] = out.split(' — ');
+      const second = rest.join(' — ').trim();
+      out = first.trim() + ', ' + second.charAt(0).toLowerCase() + second.slice(1);
+    }
+    return out.replace(/\.+$/, '').trim();
   }
 
   const modelBullets = modelBulletsRaw
