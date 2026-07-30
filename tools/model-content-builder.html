@@ -415,6 +415,7 @@ function parseOutput(raw) {
   const bullets = bulletsRaw
     .split(/\n/)
     .map(l => l.replace(/^\d+\.\s*/, '').trim())
+    .map(l => l.replace(/\.+$/, '').trim()) // bullets never end with a period
     .filter(Boolean);
   return { desc, bullets };
 }
@@ -455,7 +456,7 @@ function renderResult(sku, raw) {
 function getResultData(id, sku) {
   const desc = document.getElementById(id + '-desc').value.trim();
   const bulletsRaw = document.getElementById(id + '-bullets').value;
-  const bullets = bulletsRaw.split('\n').map(l => l.trim()).filter(Boolean);
+  const bullets = bulletsRaw.split('\n').map(l => l.trim().replace(/\.+$/, '').trim()).filter(Boolean);
   const bulletText = bullets.join('~');
   const bulletOrder = bullets.map((_, i) => i + 1).join('~');
   return { sku, desc, bulletText, bulletOrder, bullets };
