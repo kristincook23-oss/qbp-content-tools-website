@@ -203,11 +203,12 @@ textarea.edit-field:focus { border-color: var(--accent); }
           <button class="mode-btn active" id="modeUrl" onclick="setMode('url')">URL</button>
           <button class="mode-btn" id="modeCopy" onclick="setMode('copy')">Paste copy</button>
           <button class="mode-btn" id="modeFile" onclick="setMode('file')">File</button>
+          <button class="mode-btn" id="modeBatch" onclick="setMode('batch')">Batch File</button>
         </div>
       </div>
     </div>
 
-    <div class="sku-row">
+    <div class="sku-row" id="skuRow">
       <label for="modelSku">Model Number</label>
       <input type="text" id="modelSku" placeholder="e.g. SH1042" autocomplete="off">
       <span style="font-size:12px; color:var(--muted);">Used in the export — all size/color variants inherit this content</span>
@@ -223,7 +224,16 @@ textarea.edit-field:focus { border-color: var(--accent); }
       <div class="drop-success" id="fileSuccess"></div>
     </div>
 
-    <div class="hint" style="margin-top:8px;">Vendor URL, pasted copy, or a sell sheet PDF/image. For multiple models, run each separately and add to export queue.</div>
+    <div id="batchDropZone" style="display:none;"
+      ondragover="batchDragOver(event)" ondragleave="batchDragLeave(event)" ondrop="batchDrop(event)">
+      <input type="file" id="batchFileInput" accept=".xlsx" onchange="batchFileSelected(event)">
+      <div class="drop-icon">📑</div>
+      <div class="drop-label"><strong>Drop model list here</strong> or click to browse<span class="drop-formats">.xlsx &nbsp;·&nbsp; Model Code + Vendor URL columns</span></div>
+      <div class="drop-success" id="batchFileSuccess"></div>
+    </div>
+    <div id="batchPreview" style="display:none;margin-top:12px;"></div>
+
+    <div class="hint" style="margin-top:8px;" id="inputHint">Vendor URL, pasted copy, or a sell sheet PDF/image. For a whole list of models at once, use <strong>Batch File</strong> and drop in a spreadsheet with Model Code + Vendor URL columns.</div>
   </div>
 
   <!-- Step 3: Generate -->
@@ -258,6 +268,68 @@ textarea.edit-field:focus { border-color: var(--accent); }
 <script>
 let queue = []; // { sku, desc, bullets }
 let currentFile = null;
+let batchRows = []; // { modelCode, groupName, url }
+
+function batchDragOver(e) { e.preventDefault(); document.getElementById('batchDropZone').classList.add('drag-over'); }
+function batchDragLeave() { document.getElementById('batchDropZone').classList.remove('drag-over'); }
+function batchDrop(e) { e.preventDefault(); document.getElementById('batchDropZone').classList.remove('drag-over'); if (e.dataTransfer.files[0]) loadBatchFile(e.dataTransfer.files[0]); }
+function batchFileSelected(e) { if (e.target.files[0]) loadBatchFile(e.target.files[0]); }
+
+function loadBatchFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wb = XLSX.read(ev.target.result, { type: 'array' });
+    // Prefer a sheet that has a URL column; fall back to the first sheet
+    let raw = [];
+    for (const name of wb.SheetNames) {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+      if (rows.length && Object.keys(rows[0]).some(k => /url|link/i.test(k))) { raw = rows; break; }
+      if (!raw.length) raw = rows;
+    }
+    if (!raw.length) { alert('No rows found in the spreadsheet.'); return; }
+    // Detect columns case-insensitively
+    const keys = Object.keys(raw[0]);
+    const find = (...candidates) => keys.find(k => candidates.some(c => k.toLowerCase().includes(c.toLowerCase()))) || '';
+    const codeCol = find('Model Code', 'Model Number', 'Model #', 'Model', 'SKU');
+    const urlCol = find('Vendor URL', 'URL', 'Link');
+    const nameCol = find('Model Group', 'Group', 'Product Name', 'Name', 'Description');
+    if (!urlCol) { alert('Could not find a URL column (e.g. "Vendor URL") in the spreadsheet.'); return; }
+    batchRows = raw.map(r => ({
+      modelCode: String(r[codeCol] || '').trim(),
+      groupName: String(r[nameCol] || '').trim(),
+      url: String(r[urlCol] || '').trim(),
+    })).filter(r => r.url.startsWith('http'));
+    document.getElementById('batchFileSuccess').textContent = `✓ Loaded: ${file.name} — ${batchRows.length} models`;
+    renderBatchPreview();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderBatchPreview() {
+  const el = document.getElementById('batchPreview');
+  if (!batchRows.length) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">${batchRows.length} models to process</div>
+    <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:var(--surface2);">
+          <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Model Code</th>
+          <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Model Group</th>
+          <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Vendor URL</th>
+        </tr></thead>
+        <tbody>
+          ${batchRows.map(r => `<tr style="border-bottom:1px solid var(--border-light);">
+            <td style="padding:5px 10px;font-family:var(--mono);font-size:11px;">${escAttr(r.modelCode)}</td>
+            <td style="padding:5px 10px;">${escAttr(r.groupName)}</td>
+            <td style="padding:5px 10px;font-size:11px;color:var(--muted);word-break:break-all;">${escAttr(r.url)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function checkKey() {
   const v = document.getElementById('apiKey').value.trim();
@@ -269,11 +341,17 @@ function toggleKey(btn) {
   btn.textContent = el.type === 'password' ? 'Show' : 'Hide';
 }
 function setMode(mode) {
-  ['url','copy','file'].forEach(m => document.getElementById('mode'+m.charAt(0).toUpperCase()+m.slice(1)).classList.toggle('active', m === mode));
-  document.getElementById('sourceInput').style.display = mode === 'file' ? 'none' : 'block';
+  ['url','copy','file','batch'].forEach(m => document.getElementById('mode'+m.charAt(0).toUpperCase()+m.slice(1)).classList.toggle('active', m === mode));
+  document.getElementById('sourceInput').style.display = (mode === 'file' || mode === 'batch') ? 'none' : 'block';
   document.getElementById('fileDropZone').style.display = mode === 'file' ? 'block' : 'none';
+  document.getElementById('batchDropZone').style.display = mode === 'batch' ? 'block' : 'none';
+  document.getElementById('batchPreview').style.display = (mode === 'batch' && batchRows.length) ? 'block' : 'none';
+  // In batch mode the model numbers come from the spreadsheet, so hide the single field
+  document.getElementById('skuRow').style.display = mode === 'batch' ? 'none' : 'flex';
+  document.getElementById('runBtn').textContent = mode === 'batch' ? 'Generate All Models' : 'Generate Model Content';
   if (mode === 'url') document.getElementById('sourceInput').placeholder = 'https://vendor.com/product-page';
   if (mode === 'copy') document.getElementById('sourceInput').placeholder = 'Paste vendor product copy or spec sheet text here…';
+  if (mode !== 'batch') { batchRows = []; document.getElementById('batchPreview').innerHTML = ''; document.getElementById('batchFileSuccess').textContent = ''; }
   currentFile = null; document.getElementById('fileSuccess').textContent = '';
 }
 function fileDragOver(e) { e.preventDefault(); document.getElementById('fileDropZone').classList.add('drag-over'); }
@@ -331,6 +409,8 @@ RULES:
 async function runBuilder() {
   const key = document.getElementById('apiKey').value.trim();
   if (!key) { alert('Please enter your Claude API key in Step 1.'); return; }
+
+  if (document.getElementById('modeBatch').classList.contains('active')) { runBatchModels(key); return; }
 
   const sku = document.getElementById('modelSku').value.trim();
   const source = document.getElementById('sourceInput').value.trim();
@@ -407,6 +487,85 @@ async function runBuilder() {
   document.getElementById('clearBtn').style.display = 'inline';
 }
 
+async function runBatchModels(key) {
+  if (!batchRows.length) { alert('Upload a spreadsheet with Model Code + Vendor URL columns first.'); return; }
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('clearBtn').style.display = 'none';
+  document.getElementById('resultsContainer').innerHTML = '';
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  progressWrap.classList.add('visible');
+  progressBar.style.width = '0%';
+
+  let ok = 0, failed = 0;
+
+  for (let i = 0; i < batchRows.length; i++) {
+    const row = batchRows[i];
+    const label = row.modelCode || row.groupName || row.url;
+    setStatus(`Processing ${i + 1} of ${batchRows.length}… (${label})`, 'running');
+    progressBar.style.width = Math.round((i / batchRows.length) * 100) + '%';
+
+    try {
+      // Pull readable page text via the jina proxy; fall back to the raw URL
+      let pageContent = row.url;
+      try {
+        const jinaRes = await fetch('https://r.jina.ai/' + row.url);
+        if (jinaRes.ok) pageContent = await jinaRes.text();
+      } catch (e) { /* fall back to URL string */ }
+
+      const header = (row.groupName ? `Product: ${row.groupName}\n` : '')
+        + (row.modelCode ? `Model number: ${row.modelCode}\n` : '');
+      const userContent = header + 'Product copy:\n' + pageContent
+        + '\n\nGenerate model-level content. Return ONLY the formatted output as specified.';
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+          'x-api-key': key,
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 800,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userContent }]
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        failed++;
+        document.getElementById('resultsContainer').insertAdjacentHTML('beforeend',
+          `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;margin-bottom:12px;font-size:13px;">⚠️ ${escAttr(label)}: API error — ${escAttr((err.error && err.error.message) || ('HTTP ' + res.status))}</div>`);
+        continue;
+      }
+
+      const data = await res.json();
+      const raw = (data.content || []).map(c => c.text || '').join('').trim();
+      const id = renderResult(row.modelCode, raw); // append at top, editable
+      pushToQueue(getResultData(id, row.modelCode)); // auto-add to export queue
+      ok++;
+    } catch (e) {
+      failed++;
+      document.getElementById('resultsContainer').insertAdjacentHTML('beforeend',
+        `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;margin-bottom:12px;font-size:13px;">⚠️ ${escAttr(label)}: ${escAttr(e.message)}</div>`);
+    }
+
+    // Small delay between requests to ease rate limiting
+    if (i < batchRows.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+
+  progressBar.style.width = '100%';
+  setStatus(`Done — ${ok} model${ok !== 1 ? 's' : ''} generated${failed ? `, ${failed} failed` : ''}. All added to the export queue below.`, failed ? 'error' : 'done');
+  progressWrap.classList.remove('visible');
+  progressBar.style.width = '0%';
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('clearBtn').style.display = 'inline';
+}
+
 function parseOutput(raw) {
   const descMatch = raw.match(/MODEL DESCRIPTION:\s*([\s\S]*?)(?=MODEL BULLETS:|--- MODEL END ---)/i);
   const bulletsMatch = raw.match(/MODEL BULLETS:\s*([\s\S]*?)(?=--- MODEL END ---)/i);
@@ -451,6 +610,7 @@ function renderResult(sku, raw) {
     </div>`;
 
   document.getElementById('resultsContainer').insertAdjacentHTML('afterbegin', html);
+  return id;
 }
 
 function getResultData(id, sku) {
@@ -462,14 +622,17 @@ function getResultData(id, sku) {
   return { sku, desc, bulletText, bulletOrder, bullets };
 }
 
-function addToQueue(id, sku) {
-  const data = getResultData(id, sku);
-  // Replace if same SKU already queued
-  const existing = queue.findIndex(r => r.sku === sku);
+function pushToQueue(data) {
+  // Replace if same non-empty SKU already queued, otherwise append
+  const existing = data.sku ? queue.findIndex(r => r.sku === data.sku) : -1;
   if (existing >= 0) queue[existing] = data;
   else queue.push(data);
   document.getElementById('queueCount').textContent = queue.length;
   document.getElementById('queueSection').style.display = '';
+}
+
+function addToQueue(id, sku) {
+  pushToQueue(getResultData(id, sku));
   // Visual feedback
   const btn = event.target;
   btn.textContent = '✓ Added';
