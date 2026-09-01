@@ -394,12 +394,17 @@ function loadBatchFile(file) {
     const matCol = find('Material ID', 'Material', 'SKU');
     const urlCol = find('URL', 'Link');
     const descCol = find('Short Description', 'Description', 'Short Desc');
+    const nameCol = find('Name');
+    const seCol = find('Special Edition', 'Special Ed');
     const notesCol = find('Notes', 'Note');
     if (!urlCol) { alert('Could not find a URL column in the spreadsheet.'); return; }
     batchRows = raw.map(r => ({
       materialId: String(r[matCol] || '').trim(),
       url: String(r[urlCol] || '').trim(),
-      shortDesc: String(r[descCol] || '').trim(),
+      // Prefer an explicit Short Description; fall back to the Name column, which on PIM
+      // exports carries the exact colorway/variant that identifies the carried SKU.
+      shortDesc: String(r[descCol] || r[nameCol] || '').trim(),
+      specialEdition: String(r[seCol] || '').trim(),
       notes: String(r[notesCol] || '').trim(),
     })).filter(r => r.url.startsWith('http'));
     document.getElementById('batchFileSuccess').textContent = `✓ Loaded: ${file.name} — ${batchRows.length} rows`;
@@ -411,18 +416,22 @@ function renderBatchPreview() {
   const el = document.getElementById('batchPreview');
   if (!batchRows.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
+  const hasSE = batchRows.some(r => r.specialEdition);
+  const seCount = batchRows.filter(r => r.specialEdition).length;
   el.innerHTML = `
-    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">${batchRows.length} rows to process</div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">${batchRows.length} rows to process${hasSE ? ` &nbsp;·&nbsp; ${seCount} flagged as a special edition` : ''}</div>
     <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:var(--surface2);">
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Material ID</th>
+          ${hasSE ? '<th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Special Edition</th>' : ''}
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Short Description</th>
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">URL</th>
         </tr></thead>
         <tbody>
           ${batchRows.map(r => `<tr style="border-bottom:1px solid var(--border);">
             <td style="padding:5px 10px;font-family:var(--mono);font-size:11px;">${esc(r.materialId)}</td>
+            ${hasSE ? `<td style="padding:5px 10px;">${r.specialEdition ? `<span style="display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:0.04em;padding:2px 7px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn);">${esc(r.specialEdition)}</span>` : ''}</td>` : ''}
             <td style="padding:5px 10px;">${esc(r.shortDesc)}</td>
             <td style="padding:5px 10px;font-size:11px;color:var(--muted);word-break:break-all;">${esc(r.url)}</td>
           </tr>`).join('')}
@@ -450,7 +459,8 @@ function clearAll() {
   setStatus('');
 }
 
-function buildPrompt(source, includeFaqs = true, inputSkus = null) {
+function buildPrompt(source, includeFaqs = true, inputSkus = null, specialEdition = '') {
+  specialEdition = String(specialEdition || '').trim();
   const skuList = (inputSkus || []).map(s => (s && typeof s === 'object')
     ? { id: String(s.id || '').trim(), desc: String(s.desc || '').trim() }
     : { id: String(s || '').trim(), desc: '' }
@@ -593,6 +603,13 @@ How to use this list:
 - MODEL DESCRIPTION and MODEL BULLETS: generic to the model. Do not enumerate any variant's specific size, length, or color, even if the vendor copy lists several.
 - SKU BULLETS: for each entry above, read its description to pin down the carried variant, cross-reference it against the vendor copy, and write bullets only for that variant's specific details. Do NOT write bullets for other sizes, lengths, or colors in the vendor copy that are not in this list — mention such extra variants once under Review flag instead.
 ${skuList.length === 1 ? 'Exactly ONE SKU is provided: output ONE product with generic model content plus SKU bullets for that single carried variant. Do not split into multiple variant rows.' : ''}
+
+` : ''}${specialEdition ? `==== SPECIAL EDITION (authoritative) ====
+This exact SKU is the "${specialEdition}" version of the model. The linked source is often the GENERAL model page covering many colorways, so it may say little or nothing about this specific edition. Handle it like this:
+- Identify and name this product as the ${specialEdition}. Reflect the correct edition / colorway in the NAME (Long Description) and in the SKU BULLETS.
+- Scan the source for anything specific to the ${specialEdition} — a collaboration or co-brand, an exclusive colorway, finish, or graphics, special packaging, or any feature unique to this edition — and put those details in the SKU BULLETS.
+- Keep MODEL DESCRIPTION and MODEL BULLETS generic to the base model (shared across every colorway). The special-edition specifics belong ONLY in SKU BULLETS, never in the model-level sections.
+- Do NOT invent edition details. If the source contains no ${specialEdition}-specific copy, write accurate SKU bullets from what is genuinely known (edition name, colorway from the SKU description) and add a Review flag noting that the linked page had no edition-specific content — so a human can supply a better link.
 
 ` : ''}Product source:
 ${source}`;
@@ -768,8 +785,12 @@ async function runBatch() {
 
       const sourceText = (row.materialId ? `QBP Material ID: ${row.materialId}\n` : '')
         + (row.shortDesc ? `QBP Short Description: ${row.shortDesc}\n` : '')
+        + (row.specialEdition ? `Special Edition: ${row.specialEdition}\n` : '')
         + (row.notes ? `Notes: ${row.notes}\n` : '')
         + '\n' + pageContent;
+
+      // Fold the edition into the variant description so the SKU list also pins it down.
+      const skuDesc = [row.shortDesc, row.specialEdition && `${row.specialEdition} (special edition)`].filter(Boolean).join(' — ');
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -782,7 +803,7 @@ async function runBatch() {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 8000,
-          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked, (row.materialId || row.shortDesc) ? [{ id: row.materialId, desc: row.shortDesc }] : null) }],
+          messages: [{ role: 'user', content: buildPrompt(sourceText, document.getElementById('includeFaqs').checked, (row.materialId || skuDesc) ? [{ id: row.materialId, desc: skuDesc }] : null, row.specialEdition) }],
         }),
       });
 
@@ -795,7 +816,7 @@ async function runBatch() {
       const data = await response.json();
       const text = data.content?.[0]?.text || '';
       const products = parseOutput(text);
-      products.forEach(p => { p.materialId = row.materialId; });
+      products.forEach(p => { p.materialId = row.materialId; p.specialEdition = row.specialEdition; });
       // One spreadsheet row = one Material ID = one carried variant, so it must export as
       // exactly one row. Take the base (model) row and merge in the carried variant's SKU
       // bullets so both model and SKU bullet columns land on that single row — never
@@ -1163,10 +1184,11 @@ function renderResults(products, append) {
   products.forEach((prod, prodIdx) => {
     const rowCount = prod.rows.length;
     const matLabel = prod.materialId ? `<span style="font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 7px;letter-spacing:0.06em;">${esc(prod.materialId)}</span>` : '';
+    const seLabel = prod.specialEdition ? `<span style="font-family:var(--mono);font-size:10px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-border);padding:2px 7px;letter-spacing:0.06em;">${esc(prod.specialEdition)}</span>` : '';
     html += `<div class="result-card">
       <div class="result-header">
         <span class="result-title">${esc(prod.name)}</span>
-        <span class="result-meta" style="display:flex;align-items:center;gap:8px;">${matLabel}${esc(prod.brand)} · ${rowCount} import row${rowCount > 1 ? 's' : ''}</span>
+        <span class="result-meta" style="display:flex;align-items:center;gap:8px;">${matLabel}${seLabel}${esc(prod.brand)} · ${rowCount} import row${rowCount > 1 ? 's' : ''}</span>
       </div>
       <div class="product-grid">
         <div class="full-col">
