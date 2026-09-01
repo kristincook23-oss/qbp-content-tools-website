@@ -537,21 +537,27 @@ async function runBatchModels(key) {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        flagBatchFailure(row, 'API error — ' + ((err.error && err.error.message) || ('HTTP ' + res.status)));
         failed++;
-        document.getElementById('resultsContainer').insertAdjacentHTML('beforeend',
-          `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;margin-bottom:12px;font-size:13px;">⚠️ ${escAttr(label)}: API error — ${escAttr((err.error && err.error.message) || ('HTTP ' + res.status))}</div>`);
         continue;
       }
 
       const data = await res.json();
       const raw = (data.content || []).map(c => c.text || '').join('').trim();
+      const parsed = parseOutput(raw);
+      // The API call can succeed but return no real content (dead/blocked link,
+      // no product copy on the page). Flag those instead of exporting them as good.
+      if (isBadModelOutput(parsed.desc, parsed.bullets)) {
+        flagBatchFailure(row, parsed.bullets.length ? 'no product content found at link' : 'no usable content returned');
+        failed++;
+        continue;
+      }
       const id = renderResult(row.modelCode, raw); // append at top, editable
       pushToQueue(getResultData(id, row.modelCode)); // auto-add to export queue
       ok++;
     } catch (e) {
+      flagBatchFailure(row, e.message);
       failed++;
-      document.getElementById('resultsContainer').insertAdjacentHTML('beforeend',
-        `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;margin-bottom:12px;font-size:13px;">⚠️ ${escAttr(label)}: ${escAttr(e.message)}</div>`);
     }
 
     // Small delay between requests to ease rate limiting
@@ -559,7 +565,7 @@ async function runBatchModels(key) {
   }
 
   progressBar.style.width = '100%';
-  setStatus(`Done — ${ok} model${ok !== 1 ? 's' : ''} generated${failed ? `, ${failed} failed` : ''}. All added to the export queue below.`, failed ? 'error' : 'done');
+  setStatus(`Done — ${ok} model${ok !== 1 ? 's' : ''} generated${failed ? `, ${failed} flagged for review (⚠️ at top of export)` : ''}. All in the export queue below.`, failed ? 'error' : 'done');
   progressWrap.classList.remove('visible');
   progressBar.style.width = '0%';
   document.getElementById('runBtn').disabled = false;
@@ -631,6 +637,32 @@ function pushToQueue(data) {
   document.getElementById('queueSection').style.display = '';
 }
 
+// Heuristic: did the model return real content, or a "no product info / bad link" reply?
+function isBadModelOutput(desc, bullets) {
+  const n = bullets ? bullets.length : 0;
+  if (n < 1) return true;   // valid output always has bullets
+  if (n >= 3) return false; // a full set of bullets means real content — never flag on wording alone
+  const d = (desc || '').toLowerCase();
+  const redFlags = ['no product', 'cannot generate', "can't generate", 'unable to generate',
+    'unable to provide', 'unable to create', 'no content', 'no product information',
+    'no information provided', 'no description', 'please provide', 'provide the product',
+    'i do not have', "i don't have", 'could not access', "couldn't access", 'no usable content'];
+  return redFlags.some(f => d.includes(f));
+}
+
+// Add a failed/thin model to the export queue, flagged so it sorts to the top and
+// stands out for manual review, and show an inline warning on screen.
+function flagBatchFailure(row, reason) {
+  pushToQueue({
+    sku: row.modelCode,
+    desc: '⚠️ REVIEW — ' + reason + (row.url ? ' (' + row.url + ')' : ''),
+    bullets: [],
+    failed: true
+  });
+  document.getElementById('resultsContainer').insertAdjacentHTML('beforeend',
+    `<div style="padding:12px;background:#fff5f5;border:1px solid #fca5a5;margin-bottom:12px;font-size:13px;">⚠️ ${escAttr(row.modelCode || row.groupName || row.url)}: ${escAttr(reason)} — flagged at top of export for review.</div>`);
+}
+
 function addToQueue(id, sku) {
   pushToQueue(getResultData(id, sku));
   // Visual feedback
@@ -644,9 +676,12 @@ function addToQueue(id, sku) {
 function writeXlsx(items, filename) {
   const headers = ['Model Number', 'Model Description', 'Model Bullet Text', 'Model Bullet Order'];
   const rows = [headers];
-  items.forEach(r => {
-    const bulletText  = r.bullets.join('~');
-    const bulletOrder = r.bullets.map((_, i) => i + 1).join('~');
+  // Flagged (failed/thin) rows sort to the top so they're the first thing seen
+  const ordered = [...items].sort((a, b) => (b.failed ? 1 : 0) - (a.failed ? 1 : 0));
+  ordered.forEach(r => {
+    const bullets = r.bullets || [];
+    const bulletText  = bullets.join('~');
+    const bulletOrder = bullets.map((_, i) => i + 1).join('~');
     rows.push([r.sku, r.desc, bulletText, bulletOrder]);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
