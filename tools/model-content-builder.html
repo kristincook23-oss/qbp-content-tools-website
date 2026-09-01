@@ -268,7 +268,7 @@ textarea.edit-field:focus { border-color: var(--accent); }
 <script>
 let queue = []; // { sku, desc, bullets }
 let currentFile = null;
-let batchRows = []; // { modelCode, groupName, url }
+let batchRows = []; // { modelCode, groupName, specialEdition, url }
 
 function batchDragOver(e) { e.preventDefault(); document.getElementById('batchDropZone').classList.add('drag-over'); }
 function batchDragLeave() { document.getElementById('batchDropZone').classList.remove('drag-over'); }
@@ -293,10 +293,12 @@ function loadBatchFile(file) {
     const codeCol = find('Model Code', 'Model Number', 'Model #', 'Model', 'SKU');
     const urlCol = find('Vendor URL', 'URL', 'Link');
     const nameCol = find('Model Group', 'Group', 'Product Name', 'Name', 'Description');
+    const seCol = find('Special Edition', 'Special Ed');
     if (!urlCol) { alert('Could not find a URL column (e.g. "Vendor URL") in the spreadsheet.'); return; }
     batchRows = raw.map(r => ({
       modelCode: String(r[codeCol] || '').trim(),
       groupName: String(r[nameCol] || '').trim(),
+      specialEdition: String(r[seCol] || '').trim(),
       url: String(r[urlCol] || '').trim(),
     })).filter(r => r.url.startsWith('http'));
     document.getElementById('batchFileSuccess').textContent = `✓ Loaded: ${file.name} — ${batchRows.length} models`;
@@ -309,19 +311,23 @@ function renderBatchPreview() {
   const el = document.getElementById('batchPreview');
   if (!batchRows.length) { el.style.display = 'none'; return; }
   el.style.display = 'block';
+  const hasSE = batchRows.some(r => r.specialEdition);
+  const seCount = batchRows.filter(r => r.specialEdition).length;
   el.innerHTML = `
-    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">${batchRows.length} models to process</div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">${batchRows.length} models to process${hasSE ? ` &nbsp;·&nbsp; ${seCount} flagged as a special edition` : ''}</div>
     <div style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:var(--surface2);">
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Model Code</th>
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Model Group</th>
+          ${hasSE ? '<th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Special Edition</th>' : ''}
           <th style="padding:6px 10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);">Vendor URL</th>
         </tr></thead>
         <tbody>
           ${batchRows.map(r => `<tr style="border-bottom:1px solid var(--border-light);">
             <td style="padding:5px 10px;font-family:var(--mono);font-size:11px;">${escAttr(r.modelCode)}</td>
             <td style="padding:5px 10px;">${escAttr(r.groupName)}</td>
+            ${hasSE ? `<td style="padding:5px 10px;">${r.specialEdition ? `<span style="display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:0.04em;padding:2px 7px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn);">${escAttr(r.specialEdition)}</span>` : ''}</td>` : ''}
             <td style="padding:5px 10px;font-size:11px;color:var(--muted);word-break:break-all;">${escAttr(r.url)}</td>
           </tr>`).join('')}
         </tbody>
@@ -515,8 +521,16 @@ async function runBatchModels(key) {
       } catch (e) { /* fall back to URL string */ }
 
       const header = (row.groupName ? `Product: ${row.groupName}\n` : '')
-        + (row.modelCode ? `Model number: ${row.modelCode}\n` : '');
+        + (row.modelCode ? `Model number: ${row.modelCode}\n` : '')
+        + (row.specialEdition ? `Special edition: ${row.specialEdition}\n` : '');
+      // When the row names a special edition, the linked page is often the general
+      // model page, so steer the model to lead with the edition and mine the page for
+      // any edition-specific detail without inventing it.
+      const seInstruction = row.specialEdition
+        ? `\n\nSPECIAL EDITION: This model is the "${row.specialEdition}" version. Lead the MODEL DESCRIPTION with the full product name including the ${row.specialEdition} edition. Scan the source for anything specific to this edition (collaboration or co-brand, exclusive colorway, finish, graphics, or packaging) and include it in the description and bullets. The linked page may be the general model page with little edition-specific copy — do NOT invent edition details; if there are none, still name it correctly as the ${row.specialEdition} and describe the base model accurately.`
+        : '';
       const userContent = header + 'Product copy:\n' + pageContent
+        + seInstruction
         + '\n\nGenerate model-level content. Return ONLY the formatted output as specified.';
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -552,7 +566,7 @@ async function runBatchModels(key) {
         failed++;
         continue;
       }
-      const id = renderResult(row.modelCode, raw); // append at top, editable
+      const id = renderResult(row.modelCode, raw, row.specialEdition); // append at top, editable
       pushToQueue(getResultData(id, row.modelCode)); // auto-add to export queue
       ok++;
     } catch (e) {
@@ -585,14 +599,17 @@ function parseOutput(raw) {
   return { desc, bullets };
 }
 
-function renderResult(sku, raw) {
+function renderResult(sku, raw, specialEdition = '') {
   const { desc, bullets } = parseOutput(raw);
   const id = 'result-' + Date.now();
+  const seBadge = specialEdition
+    ? `<span style="font-family:var(--mono);font-size:10px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-border);padding:2px 7px;letter-spacing:0.04em;margin-left:8px;">${escAttr(specialEdition)}</span>`
+    : '';
 
   const html = `
     <div class="result-card" id="${id}">
       <div class="result-header">
-        <div class="result-title">${sku || '(no SKU entered)'} — Model Content</div>
+        <div class="result-title">${sku || '(no SKU entered)'} — Model Content${seBadge}</div>
         <div class="result-meta">${bullets.length} bullet${bullets.length !== 1 ? 's' : ''}</div>
       </div>
       <div class="result-body">
