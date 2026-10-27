@@ -154,7 +154,7 @@ table.fields tr:last-child td{border-bottom:none}
   <div class="step-card">
     <div class="step-head"><div class="step-num">3</div><div class="step-label">Build</div></div>
     <div class="opt-row"><input type="checkbox" id="enrich"><label for="enrich">Enrich from vendor sites (Claude web search)</label></div>
-    <div class="opt-sub">Off: Enterworks content only, everything else flagged for manual entry. On: for each product, Claude searches the UPC / part number, fills empty controlled-spec fields with valid values, and adds up to 4 new consumer-facing feature bullets (use cases, rider benefits, brand voice) that are not already listed. Everything from the web is marked <em>vendor — verify</em> with a source link. The Lead Marketing Description is AI-written from the full feature set whenever a key is present, with or without this box checked.</div>
+    <div class="opt-sub">Off: Enterworks content only, everything else flagged for manual entry. On: Claude searches the UPC / part number once per model (size and setting variants share one lookup and inherit the same model-level specs and features), fills empty controlled-spec fields with valid values, and adds up to 4 new consumer-facing feature bullets (use cases, rider benefits, brand voice) that are not already listed. Everything from the web is marked <em>vendor — verify</em> with a source link. The Lead Marketing Description is AI-written from the full feature set whenever a key is present, with or without this box checked.</div>
     <div class="gen-row">
       <button class="btn-run" id="runBtn" onclick="run()" disabled>Build Template</button>
       <button class="btn-clear-link" id="clearBtn" onclick="clearAll()">Clear all</button>
@@ -316,6 +316,14 @@ function buildFeatures(ew){
   if(prop&&String(prop).trim())add(String(prop).trim(),features);
   return {features,overview};
 }
+// Model identifier used to group size/setting variants so they share one vendor
+// lookup. Exact (case-insensitive) header match, so "Model Description" etc. never
+// collide. Returns null when there is no model field → that SKU is its own group.
+function modelKeyOf(ew){
+  const cand=['Model Code','Model Number','Model #','Model'];
+  for(const c of cand){for(const k of Object.keys(ew)){if(String(k).trim().toLowerCase()===c.toLowerCase()){const v=ew[k];if(v!=null&&String(v).trim())return String(v).trim();}}}
+  return null;
+}
 
 // ---------- core deterministic map ----------
 function mapDeterministic(){
@@ -342,15 +350,18 @@ function mapDeterministic(){
 }
 
 // ---------- vendor enrichment via Claude web search ----------
-function buildEnrichPrompt(ew,needed,existingFeatures,overview){
+function buildEnrichPrompt(ew,needed,existingFeatures,overview,multiVariant){
   const id=[`Brand: ${ew['Brand name']||''}`,`Product name: ${ew['Name']||''}`,`Manufacturer part #: ${ew['Manufacturer Part Number']||''}`,`UPC: ${ew['UPC Value']||''}`].join('\n');
   const existing=(existingFeatures||[]).map(b=>'- '+b).join('\n')||'(none)';
   const ovBlock=(overview&&overview.length)?overview.map(o=>'- '+o).join('\n'):'(none)';
   const specSection=needed.length
     ? needed.map(n=>n.allowed&&n.allowed.length?`- "${n.field}" (must be one of: ${n.allowed.join(' | ')})`:`- "${n.field}"`).join('\n')
     : '(none needed)';
-  return `You are enriching a product listing for REI. This content is consumer-facing and is reviewed by REI copywriters, so use REI's warm, benefit-driven voice. Find the exact product below on the brand's own consumer page or an authorized retailer using its UPC or part number. The UPC is the strongest identifier; match the exact size/variant.
-
+  const variantNote=multiVariant
+    ? `\nThis is ONE size/setting of a product that has several variants sharing these columns. Return ONLY specs and features that are the same for every size/setting of this model (materials, construction, product type, compatibility, brand attributes, use cases). Do NOT return anything that varies by size or setting — no specific length, size, per-size weight, or per-size dimensions — so those can be entered per variant.\n`
+    : '';
+  return `You are enriching a product listing for REI. This content is consumer-facing and is reviewed by REI copywriters, so use REI's warm, benefit-driven voice. Find the exact product below on the brand's own consumer page or an authorized retailer using its UPC or part number. The UPC is the strongest identifier; use it to land on the right product.
+${variantNote}
 PRODUCT:
 ${id}
 
@@ -368,8 +379,8 @@ TASK 2 - NEW CONSUMER FEATURES: suggest up to 4 NEW feature bullets that are not
 Reply with ONLY this JSON, no prose:
 {"specs":{"FieldName":{"value":"...","source":"https://..."}},"new_features":["...","..."],"source":"https://..."}`;
 }
-async function enrichProduct(apiKey,ew,needed,existingFeatures,overview){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed,existingFeatures,overview)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
+async function enrichProduct(apiKey,ew,needed,existingFeatures,overview,multiVariant){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed,existingFeatures,overview,multiVariant)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
   const data=await res.json();
   const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
@@ -462,36 +473,50 @@ async function run(){
 
   if(doEnrich){
     document.getElementById('progWrap').classList.add('visible');
-    for(let i=0;i<products.length;i++){
-      const p=products[i];
-      setStatus(`Vendor lookup ${i+1} of ${products.length}…`,'running');
-      document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
-      const needed=Object.entries(p.cells).filter(([,c])=>c.src==='rev'&&c.note&&c.note.indexOf('spec')===0).map(([ci,c])=>({ci,field:c.field,allowed:c.allowed}));
-      // existing bullets (for the prompt + dedup) and empty feature columns to fill
-      const hmap=Object.fromEntries(p.headers);
-      const existingFeatures=Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>String(c.value).trim());
-      const emptyFeatureCols=p.headers.filter(([ci,f])=>/^Feature \d+$/.test(f)&&!p.cells[ci]).sort((a,b)=>parseInt(a[1].split(' ')[1])-parseInt(b[1].split(' ')[1]));
-      if(needed.length||emptyFeatureCols.length){
-        try{
-          const found=await enrichProduct(apiKey,p.ew,needed,existingFeatures,p.overview);
-          // spec fields
-          for(const n of needed){
-            const hit=found.specs&&found.specs[n.field];
-            if(hit&&hit.value){p.cells[n.ci].value=hit.value;p.cells[n.ci].src='vend';p.cells[n.ci].note='vendor — verify';p.cells[n.ci].link=hit.source||found.source||'';}
+    // Group selected products by model so size/setting variants share one vendor
+    // lookup. Items with no model field are their own group (per-SKU, as before).
+    const groups=new Map();
+    for(const p of products){const key=modelKeyOf(p.ew)||('__sku__'+p.vi);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);}
+    const groupList=[...groups.values()];
+    const unit=groupList.length<products.length?(' model'+(groupList.length>1?'s':'')):'';
+    for(let gi=0;gi<groupList.length;gi++){
+      const grp=groupList[gi], rep=grp[0], multiVariant=grp.length>1;
+      setStatus(`Vendor lookup ${gi+1} of ${groupList.length}${unit}…`,'running');
+      document.getElementById('progBar').style.width=Math.round(gi/groupList.length*100)+'%';
+      // union of empty controlled-spec fields across the group (for the prompt)
+      const neededMap=new Map();
+      for(const p of grp)for(const c of Object.values(p.cells))if(c.src==='rev'&&c.note&&c.note.indexOf('spec')===0&&!neededMap.has(c.field))neededMap.set(c.field,{field:c.field,allowed:c.allowed});
+      const needed=[...neededMap.values()];
+      // features + overview pooled across the group (prompt context + dedup source)
+      const existingFeatures=[...new Set(grp.flatMap(p=>Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>String(c.value).trim())))];
+      const overview=[...new Set(grp.flatMap(p=>p.overview||[]))];
+      const anyEmptyFeatureCols=grp.some(p=>p.headers.some(([ci,f])=>/^Feature \d+$/.test(f)&&!p.cells[ci]));
+      if(!needed.length&&!anyEmptyFeatureCols)continue;
+      try{
+        const found=await enrichProduct(apiKey,rep.ew,needed,existingFeatures,overview,multiVariant);
+        const tag=multiVariant?' (model-level)':'';
+        for(const p of grp){
+          // spec fields: fill only this variant's still-empty controlled-spec cells
+          for(const c of Object.values(p.cells)){
+            if(c.src==='rev'&&c.note&&c.note.indexOf('spec')===0){
+              const hit=found.specs&&found.specs[c.field];
+              if(hit&&hit.value){c.value=hit.value;c.src='vend';c.note='vendor — verify'+tag;c.link=hit.source||found.source||'';}
+            }
           }
-          // consumer-facing bullets into empty feature slots, deduped, capped at 4
-          const existingNorms=existingFeatures.map(normBullet).concat((p.overview||[]).map(normBullet));
+          // consumer-facing bullets into this variant's empty slots, deduped, capped at 4
+          const emptyFeatureCols=p.headers.filter(([ci,f])=>/^Feature \d+$/.test(f)&&!p.cells[ci]).sort((a,b)=>parseInt(a[1].split(' ')[1])-parseInt(b[1].split(' ')[1]));
+          const existingNorms=Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>normBullet(String(c.value))).concat((p.overview||[]).map(normBullet));
           let slot=0, added=0;
           for(const nf of (found.new_features||[])){
             if(added>=4||slot>=emptyFeatureCols.length)break;
             const v=stripEmDash(String(nf||'').trim()); if(!v)continue;
             if(isNearDup(v,existingNorms))continue;
             const [ci,field]=emptyFeatureCols[slot++];
-            p.cells[ci]={field,value:v,src:'vend',note:'vendor consumer copy — verify',link:found.source||''};
+            p.cells[ci]={field,value:v,src:'vend',note:'vendor consumer copy — verify'+tag,link:found.source||''};
             existingNorms.push(normBullet(v)); added++;
           }
-        }catch(e){setStatus('Vendor lookup error: '+e.message,'error');}
-      }
+        }
+      }catch(e){setStatus('Vendor lookup error: '+e.message,'error');}
     }
     document.getElementById('progBar').style.width='100%';
   }
