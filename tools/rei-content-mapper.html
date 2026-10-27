@@ -105,14 +105,14 @@ table.fields tr:last-child td{border-bottom:none}
 
   <div class="step-card">
     <div class="step-head"><div class="step-num">1</div><div class="step-label">API Key</div>
-      <div class="step-head-right"><span class="hint">only needed for vendor-gap lookup</span></div>
+      <div class="step-head-right"><span class="hint">writes the Lead Marketing Description; also powers vendor lookup</span></div>
     </div>
     <div class="key-row">
       <input type="password" id="apiKey" placeholder="sk-ant-api03-…" autocomplete="off" oninput="checkKey()">
       <button class="btn-show" onclick="toggleKey(this)">Show</button>
       <span class="key-confirmed" id="keyConfirmed">✓ Key set</span>
     </div>
-    <div class="hint">Used only to call Claude with web search, never saved or sent anywhere else. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</div>
+    <div class="hint">With a key, Claude writes each product's Lead Marketing Description from its assembled features. Without one, that field is left blank for manual entry. Used only to call Claude, never saved or sent anywhere else. Get yours at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys.</div>
   </div>
 
   <div class="step-card">
@@ -154,7 +154,7 @@ table.fields tr:last-child td{border-bottom:none}
   <div class="step-card">
     <div class="step-head"><div class="step-num">3</div><div class="step-label">Build</div></div>
     <div class="opt-row"><input type="checkbox" id="enrich"><label for="enrich">Enrich from vendor sites (Claude web search)</label></div>
-    <div class="opt-sub">Off: Enterworks content only, everything else flagged for manual entry. On: for each product, Claude searches the UPC / part number, fills empty controlled-spec fields with valid values, and adds up to 4 new consumer-facing feature bullets (use cases, rider benefits, brand voice) that are not already listed. Everything from the web is marked <em>vendor — verify</em> with a source link.</div>
+    <div class="opt-sub">Off: Enterworks content only, everything else flagged for manual entry. On: for each product, Claude searches the UPC / part number, fills empty controlled-spec fields with valid values, and adds up to 4 new consumer-facing feature bullets (use cases, rider benefits, brand voice) that are not already listed. Everything from the web is marked <em>vendor — verify</em> with a source link. The Lead Marketing Description is AI-written from the full feature set whenever a key is present, with or without this box checked.</div>
     <div class="gen-row">
       <button class="btn-run" id="runBtn" onclick="run()" disabled>Build Template</button>
       <button class="btn-clear-link" id="clearBtn" onclick="clearAll()">Clear all</button>
@@ -210,7 +210,9 @@ table.fields tr:last-child td{border-bottom:none}
 const LB_TO_G = 453.592;
 const UNIVERSAL_MAP = {
   'Vendor Item #':['copy','SKU'], 'Brand':['copy','Brand name'],
-  'Customer-Facing Name':['copy','Name'], 'Lead Marketing Description':['copy','Model Description'],
+  'Customer-Facing Name':['copy','Name'],
+  // Lead Marketing Description is NOT a straight copy — it is synthesized by a
+  // separate LLM call from the full feature set (see synthLeadDesc).
   'Weight':['weight_lbs','Weight'], 'Weight (g)':['weight_g','Weight'],
 };
 const FEATURE_SOURCES = ['Model Bullet Text','SKU Bullet Text'];
@@ -273,23 +275,46 @@ function transform(kind,src,ew){
   if(kind==='copy')return raw;
   return raw;
 }
+// Remove em dashes (and en dashes) from a string: keep numeric ranges as hyphens,
+// turn any other dash into a comma. Used for AI-written copy only, never vendor text.
+function stripEmDash(s){return String(s)
+  .replace(/(\d)\s*[—–]\s*(\d)/g,'$1-$2')
+  .replace(/\s*[—–]\s*/g,', ')
+  .replace(/\s+,/g,',')
+  .replace(/,\s*,/g,', ')
+  .trim();}
+// Count sentence-ending punctuation so we can tell a distinct feature bullet
+// (short, one idea) from a story-style overview paragraph (multiple sentences).
+function sentenceCount(t){const m=String(t).trim().match(/[.!?](\s|$)/g);return m?m.length:0;}
+function isOverview(t){const s=String(t).trim();const words=s.split(/\s+/).length;return sentenceCount(s)>=2&&words>=18;}
+// MPN/UPC and Prop 65 belong in feature columns (REI VIF requires them) but are
+// NOT marketing facts, so they are excluded when synthesizing the lead description.
+function isMetaFeature(v){const s=String(v);return /^Manufacturer Part Number:/i.test(s)||/^UPC:/i.test(s)||/proposition\s*65/i.test(s)||/^\s*WARNING:/i.test(s);}
+
+// Returns { features, overview }:
+//  - features: distinct product-feature bullets that go into the Feature columns
+//  - overview: vendor overview paragraph(s) kept as source material for Q only
 function buildFeatures(ew){
-  const f=[], seen=new Set();
-  const add=t=>{const v=String(t).trim();if(!v)return;const key=v.toLowerCase().replace(/\s+/g,' ');if(seen.has(key))return;seen.add(key);f.push(v);};
-  // marketing bullets, de-duplicated (same text can appear in both Model and SKU bullet fields)
-  for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(add);}
+  const features=[], overview=[], seen=new Set();
+  const add=(t,bucket)=>{const v=String(t).trim();if(!v)return;const key=v.toLowerCase().replace(/\s+/g,' ');if(seen.has(key))return;seen.add(key);bucket.push(v);};
+  // Vendor overview paragraph: source material for the lead description, not a feature column.
+  const md=ew['Model Description'];
+  if(md&&String(md).trim())add(String(md).trim(),overview);
+  // Marketing bullets, de-duplicated (same text can appear in both Model and SKU bullet fields).
+  // A bullet that reads as multi-sentence story copy is routed to the overview, not a feature column.
+  for(const s of FEATURE_SOURCES){const v=ew[s];if(v&&String(v).trim())String(v).split('~').forEach(piece=>{const t=String(piece).trim();if(!t)return;add(t,isOverview(t)?overview:features);});}
   // REI VIF rule: include MPN + UPC as a bullet
   const mpn=ew['Manufacturer Part Number'], upc=ew['UPC Value'];
   if((mpn&&String(mpn).trim())||(upc&&String(upc).trim())){
     const parts=[];
     if(mpn&&String(mpn).trim())parts.push('Manufacturer Part Number: '+String(mpn).trim());
     if(upc&&String(upc).trim())parts.push('UPC: '+String(upc).trim());
-    add(parts.join(' / '));
+    add(parts.join(' / '),features);
   }
   // REI VIF rule: include Prop 65 warning as a bullet when present
   const prop=ew['Prop 65 Text'];
-  if(prop&&String(prop).trim())add(String(prop).trim());
-  return f;
+  if(prop&&String(prop).trim())add(String(prop).trim(),features);
+  return {features,overview};
 }
 
 // ---------- core deterministic map ----------
@@ -302,23 +327,25 @@ function mapDeterministic(){
   for(const vi of Object.keys(reqData)){
     if(!ewData[vi])continue;
     if(pick.size&&!pick.has(vi))continue;
-    const ew=ewData[vi], feats=buildFeatures(ew), cells={};
+    const ew=ewData[vi], feat=buildFeatures(ew), feats=feat.features, overview=feat.overview, cells={};
     for(const [ci,field] of headers){
       if(field==='REI Item #') cells[ci]={field,value:reqData[vi].reiItem,src:'ok',note:'REI request'};
+      else if(field==='Lead Marketing Description') cells[ci]={field,value:null,src:'rev',note:'needs AI synthesis (add a key)'};
       else if(UNIVERSAL_MAP[field]){const [k,s]=UNIVERSAL_MAP[field];const v=transform(k,s,ew);cells[ci]={field,value:v,src:v!=null?'ok':'rev',note:'Enterworks: '+s};}
       else if(/^Feature \d+$/.test(field)){const n=parseInt(field.split(' ')[1])-1;if(n<feats.length)cells[ci]={field,value:feats[n],src:'ok',note:'Enterworks bullet'};}
       else if(field==='Best Use'){const al=allowed['Best Use']||[];if(al.includes('Cycling'))cells[ci]={field,value:'Cycling',src:'ok',note:'default: Cycling'};else cells[ci]={field,value:null,src:'rev',note:'spec (Cycling not offered here)',allowed:al};}
       else cells[ci]={field,value:null,src:'rev',note:'spec',allowed:allowed[field]||null};
     }
-    out.push({vi,reiItem:reqData[vi].reiItem,ew,cells,headers,tab});
+    out.push({vi,reiItem:reqData[vi].reiItem,ew,cells,headers,tab,overview});
   }
   return out;
 }
 
 // ---------- vendor enrichment via Claude web search ----------
-function buildEnrichPrompt(ew,needed,existingFeatures,leadDesc){
+function buildEnrichPrompt(ew,needed,existingFeatures,overview){
   const id=[`Brand: ${ew['Brand name']||''}`,`Product name: ${ew['Name']||''}`,`Manufacturer part #: ${ew['Manufacturer Part Number']||''}`,`UPC: ${ew['UPC Value']||''}`].join('\n');
   const existing=(existingFeatures||[]).map(b=>'- '+b).join('\n')||'(none)';
+  const ovBlock=(overview&&overview.length)?overview.map(o=>'- '+o).join('\n'):'(none)';
   const specSection=needed.length
     ? needed.map(n=>n.allowed&&n.allowed.length?`- "${n.field}" (must be one of: ${n.allowed.join(' | ')})`:`- "${n.field}"`).join('\n')
     : '(none needed)';
@@ -327,20 +354,22 @@ function buildEnrichPrompt(ew,needed,existingFeatures,leadDesc){
 PRODUCT:
 ${id}
 
-ALREADY LISTED (do NOT repeat any of these, and do not restate specs that live in their own columns like materials, dimensions, weight, part numbers, or speeds):
+ALREADY LISTED FEATURES (do NOT repeat any of these, and do not restate specs that live in their own columns like materials, dimensions, weight, part numbers, or speeds):
 ${existing}
-Marketing description: ${leadDesc||'(none)'}
+
+VENDOR OVERVIEW COPY (background only — do NOT repeat or paraphrase these sentences as feature bullets):
+${ovBlock}
 
 TASK 1 - SPEC FIELDS: fill each field below. Take the value from the product's own bullets and description listed above when it is there (for example a "Height adjustable from..." bullet fills a height field, a "steel and composite construction" bullet fills a materials field), otherwise confirm it from a real product page. For fields with an allowed list, return one of those exact strings or omit. For free-text fields such as materials or dimensions, return a short, clean value. Omit any field you cannot support.
 ${specSection}
 
-TASK 2 - NEW CONSUMER FEATURES: suggest up to 4 NEW feature bullets that are not already listed above. Focus on use cases, rider or user benefits, and brand-story or consumer-friendly angles, one short sentence each. Do NOT restate specs and do NOT repeat anything already listed. If the product is already well described, return fewer or an empty list. Only include points you can support from a real product page.
+TASK 2 - NEW CONSUMER FEATURES: suggest up to 4 NEW feature bullets that are not already listed above and are not already said in the vendor overview copy. Focus on use cases, rider or user benefits, and brand-story or consumer-friendly angles, one short sentence each. Do NOT use em dashes. Do NOT restate specs and do NOT repeat anything already listed. If the product is already well described, return fewer or an empty list. Only include points you can support from a real product page.
 
 Reply with ONLY this JSON, no prose:
 {"specs":{"FieldName":{"value":"...","source":"https://..."}},"new_features":["...","..."],"source":"https://..."}`;
 }
-async function enrichProduct(apiKey,ew,needed,existingFeatures,leadDesc){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed,existingFeatures,leadDesc)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
+async function enrichProduct(apiKey,ew,needed,existingFeatures,overview){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:buildEnrichPrompt(ew,needed,existingFeatures,overview)}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:4}]})});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
   const data=await res.json();
   const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
@@ -361,6 +390,63 @@ function isNearDup(v,existingNorms){
     if(uni&&inter/uni>=0.8)return true;   // very similar wording
   }
   return false;
+}
+
+// ---------- lead marketing description (column Q) synthesis ----------
+// Pull REI's own example row description from the template tab, to model voice + length on.
+function exampleLeadDesc(wb,tab){
+  const rows=rowsOf(wb,tab); const hdr=(rows[3]||[]);
+  let ci=-1; hdr.forEach((v,i)=>{if(v!=null&&String(v).trim()==='Lead Marketing Description')ci=i;});
+  if(ci<0)return '';
+  for(let r=4;r<=6&&r<rows.length;r++){const v=rows[r]&&rows[r][ci];if(v!=null&&String(v).trim())return String(v).trim().slice(0,400);}
+  return '';
+}
+// The full fact set for one product: overview copy + every feature-column value,
+// minus the meta bullets (part numbers, Prop 65) that are not marketing facts.
+function gatherFacts(p){
+  const out=[], seen=new Set();
+  const add=t=>{const v=String(t).trim();if(!v)return;const k=v.toLowerCase().replace(/\s+/g,' ');if(seen.has(k))return;seen.add(k);out.push(v);};
+  (p.overview||[]).forEach(add);
+  Object.keys(p.cells).map(Number).sort((a,b)=>a-b).forEach(ci=>{const c=p.cells[ci];if(/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()&&!isMetaFeature(c.value))add(c.value);});
+  return out;
+}
+function buildLeadPrompt(ew,facts,example,used){
+  const brand=String(ew['Brand name']||'').trim(), name=String(ew['Name']||'').trim();
+  const factList=facts.length?facts.map(f=>'- '+f).join('\n'):'(no features available)';
+  const usedList=(used&&used.length)?used.map(u=>'- '+u).join('\n'):'(none yet)';
+  const ex=example?`REI EXAMPLE to model voice and length on (do NOT copy its words or borrow its facts):\n"${example}"\n\n`:'';
+  return `You are writing the single Lead Marketing Description for one product on an REI vendor submission. REI's voice is warm, concrete, and benefit-driven.
+
+PRODUCT:
+Brand: ${brand}
+Product name: ${name}
+
+FEATURES AND SOURCE COPY — the ONLY facts you may use:
+${factList}
+
+${ex}ALREADY-USED DESCRIPTIONS for other products in this batch — yours must be clearly different from each:
+${usedList}
+
+RULES:
+- Exactly ONE sentence, 30 to 45 words.
+- Name the brand and the product type; say what it is, what it fits or works with, and its main benefit.
+- Use ONLY facts from the list above. Do not invent specs, materials, compatibility, or claims.
+- No em dashes. No generic brand boilerplate that could apply to any product.
+- Do not reuse or closely paraphrase any already-used description above.
+
+Reply with ONLY this JSON, no prose:
+{"description":"..."}`;
+}
+async function synthLeadDesc(apiKey,ew,facts,example,used){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:buildLeadPrompt(ew,facts,example,used)}]})});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
+  const data=await res.json();
+  const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+  const m=text.replace(/```json|```/g,'').match(/\{[\s\S]*\}/);
+  let desc='';
+  if(m){try{desc=String(JSON.parse(m[0]).description||'').trim();}catch(e){desc='';}}
+  if(!desc)desc=text.replace(/```json|```/g,'').trim();
+  return stripEmDash(desc);
 }
 
 // ---------- run ----------
@@ -384,23 +470,21 @@ async function run(){
       // existing bullets (for the prompt + dedup) and empty feature columns to fill
       const hmap=Object.fromEntries(p.headers);
       const existingFeatures=Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()).map(c=>String(c.value).trim());
-      const leadCi=p.headers.find(([,f])=>f==='Lead Marketing Description');
-      const leadDesc=leadCi&&p.cells[leadCi[0]]?p.cells[leadCi[0]].value:'';
       const emptyFeatureCols=p.headers.filter(([ci,f])=>/^Feature \d+$/.test(f)&&!p.cells[ci]).sort((a,b)=>parseInt(a[1].split(' ')[1])-parseInt(b[1].split(' ')[1]));
       if(needed.length||emptyFeatureCols.length){
         try{
-          const found=await enrichProduct(apiKey,p.ew,needed,existingFeatures,leadDesc);
+          const found=await enrichProduct(apiKey,p.ew,needed,existingFeatures,p.overview);
           // spec fields
           for(const n of needed){
             const hit=found.specs&&found.specs[n.field];
             if(hit&&hit.value){p.cells[n.ci].value=hit.value;p.cells[n.ci].src='vend';p.cells[n.ci].note='vendor — verify';p.cells[n.ci].link=hit.source||found.source||'';}
           }
           // consumer-facing bullets into empty feature slots, deduped, capped at 4
-          const existingNorms=existingFeatures.map(normBullet);
+          const existingNorms=existingFeatures.map(normBullet).concat((p.overview||[]).map(normBullet));
           let slot=0, added=0;
           for(const nf of (found.new_features||[])){
             if(added>=4||slot>=emptyFeatureCols.length)break;
-            const v=String(nf||'').trim(); if(!v)continue;
+            const v=stripEmDash(String(nf||'').trim()); if(!v)continue;
             if(isNearDup(v,existingNorms))continue;
             const [ci,field]=emptyFeatureCols[slot++];
             p.cells[ci]={field,value:v,src:'vend',note:'vendor consumer copy — verify',link:found.source||''};
@@ -408,6 +492,32 @@ async function run(){
           }
         }catch(e){setStatus('Vendor lookup error: '+e.message,'error');}
       }
+    }
+    document.getElementById('progBar').style.width='100%';
+  }
+
+  // Synthesize the Lead Marketing Description (column Q) whenever a key is present,
+  // independent of vendor enrichment. Runs last, after the full feature set is assembled.
+  if(apiKey.startsWith('sk-')){
+    document.getElementById('progWrap').classList.add('visible');
+    const example=exampleLeadDesc(tplWb,products[0].tab);
+    const usedDescs=[], usedNorms=[];
+    for(let i=0;i<products.length;i++){
+      const p=products[i];
+      setStatus(`Writing marketing description ${i+1} of ${products.length}…`,'running');
+      document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
+      const leadCi=p.headers.find(([,f])=>f==='Lead Marketing Description');
+      if(!leadCi)continue;
+      const ci=leadCi[0], facts=gatherFacts(p);
+      if(!facts.length){p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'no features to write from'};continue;}
+      try{
+        let desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs);
+        if(desc&&isNearDup(desc,usedNorms))desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs.concat(['(too similar to another product — rewrite so it is clearly different)']));
+        if(!desc){p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'AI returned nothing — write manually'};continue;}
+        const dup=isNearDup(desc,usedNorms);
+        p.cells[ci]={field:'Lead Marketing Description',value:desc,src:dup?'rev':'vend',note:dup?'AI-written but similar to another — edit':'AI-written from features — verify'};
+        usedDescs.push(desc); usedNorms.push(normBullet(desc));
+      }catch(e){setStatus('Marketing description error: '+e.message,'error');p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'AI error — write manually'};}
     }
     document.getElementById('progBar').style.width='100%';
   }
