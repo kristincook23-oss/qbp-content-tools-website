@@ -421,11 +421,86 @@ function gatherFacts(p){
   Object.keys(p.cells).map(Number).sort((a,b)=>a-b).forEach(ci=>{const c=p.cells[ci];if(/^Feature \d+$/.test(c.field)&&c.value!=null&&String(c.value).trim()&&!isMetaFeature(c.value))add(c.value);});
   return out;
 }
-function buildLeadPrompt(ew,facts,example,used){
+// ---- style-level leads: REI publishes the lead per style (REI Item #), so every
+// row sharing an REI Item # gets one identical, evergreen lead. ----
+// Size-like values (155mm, 32t, 32-tooth, 250 g, 1.2 lbs ...), normalized so
+// "32-tooth", "32 T" and "32t" all compare equal.
+function sizeTokens(s){
+  const out=new Set(), re=/(\d+(?:\.\d+)?)\s*-?\s*(mm|cm|in|tooth|teeth|t|kg|g|lbs?|oz)(?![a-z])/gi;
+  let m; while((m=re.exec(String(s||'')))!==null){
+    let u=m[2].toLowerCase(); if(u==='tooth'||u==='teeth')u='t'; if(u==='lbs')u='lb';
+    out.add(m[1]+u);
+  }
+  return out;
+}
+// What the rows of one style share vs. what differs between them.
+function styleProfile(grp){
+  const norm=t=>String(t).toLowerCase().replace(/\s+/g,' ').trim();
+  const perRow=grp.map(gatherFacts);
+  const counts=new Map(), firstText=new Map();
+  perRow.forEach(fs=>new Set(fs.map(norm)).forEach(k=>counts.set(k,(counts.get(k)||0)+1)));
+  perRow.forEach(fs=>fs.forEach(f=>{const k=norm(f);if(!firstText.has(k))firstText.set(k,f);}));
+  const shared=[], varying=[];
+  for(const [k,n] of counts)(n===grp.length?shared:varying).push(firstText.get(k));
+  // size-like values not common to every row (from names, features, weights)
+  const rowTok=grp.map(p=>{const t=new Set();
+    [p.ew['Name'],...Object.values(p.cells).filter(c=>/^Feature \d+$/.test(c.field)).map(c=>c.value)].forEach(v=>sizeTokens(v).forEach(x=>t.add(x)));
+    const w=transform('weight_lbs','Weight',p.ew); if(w)sizeTokens(w).forEach(x=>t.add(x));
+    const g=toGrams(p.ew); if(g!=null)t.add(g+'g');
+    return t;});
+  const allTok=new Set(rowTok.flatMap(t=>[...t]));
+  const varyTok=[...allTok].filter(x=>!rowTok.every(t=>t.has(x)));
+  // color words that differ between rows
+  const colors=[...new Set(grp.map(p=>String(p.ew['Color']||p.ew['Colour']||'').trim()).filter(Boolean))];
+  const varyColors=colors.length>1?colors:[];
+  // if rows share no facts at all, fall back to the facts that carry no varying value
+  let allowed=shared;
+  if(!allowed.length)allowed=varying.filter(f=>![...sizeTokens(f)].some(x=>varyTok.includes(x)));
+  return {names:grp.map(p=>String(p.ew['Name']||p.vi).trim()),facts:allowed,varying,varyTok,varyColors};
+}
+// Does a lead mention a value that differs between the style's rows?
+function leakedVariant(desc,prof){
+  const hits=[...sizeTokens(desc)].filter(x=>prof.varyTok.includes(x));
+  const low=String(desc).toLowerCase();
+  prof.varyColors.forEach(c=>{if(new RegExp('\\b'+reEsc(c.toLowerCase())+'\\b').test(low))hits.push(c);});
+  return hits;
+}
+function buildLeadPrompt(ew,facts,example,used,style){
   const brand=String(ew['Brand name']||'').trim(), name=String(ew['Name']||'').trim();
   const factList=facts.length?facts.map(f=>'- '+f).join('\n'):'(no features available)';
   const usedList=(used&&used.length)?used.map(u=>'- '+u).join('\n'):'(none yet)';
   const ex=example?`REI EXAMPLE to model voice and length on (do NOT copy its words or borrow its facts):\n"${example}"\n\n`:'';
+  if(style){
+    const names=style.names.map(n=>'- '+n).join('\n');
+    const vary=style.varying.length?style.varying.map(v=>'- '+v).join('\n'):'(none)';
+    const vals=style.varyTok.concat(style.varyColors);
+    return `You are writing the single Lead Marketing Description for one product STYLE on an REI vendor submission. REI publishes this text once for the whole style, so the identical sentence will appear on every version listed below. REI's voice is warm, concrete, and benefit-driven.
+
+PRODUCT STYLE:
+Brand: ${brand}
+This style has ${style.names.length} versions (sizes / settings / colors):
+${names}
+
+FEATURES AND SOURCE COPY shared by EVERY version — the ONLY facts you may use:
+${factList}
+
+DETAILS THAT DIFFER BETWEEN THE VERSIONS — do NOT mention any of these:
+${vary}
+${vals.length?`Specific values that differ between versions and must NOT appear: ${vals.join(', ')}\n`:''}
+${ex}ALREADY-USED DESCRIPTIONS for other products in this batch — yours must be clearly different from each:
+${usedList}
+
+RULES:
+- Exactly ONE sentence, 30 to 45 words.
+- Name the brand and the product type; say what it is, what it fits or works with, and its main benefit.
+- The sentence must be true for EVERY version listed. Do NOT mention anything that differs between versions: no crank length, tooth count, size, weight, or color. A detail that every version shares (for example a chainline or spindle type common to the whole style) is fine.
+- Use ONLY facts from the shared list above. Do not invent specs, materials, compatibility, or claims.
+- No em dashes. No generic brand boilerplate that could apply to any product.
+- Do not reuse or closely paraphrase any already-used description above.
+
+Reply with ONLY this JSON, no prose:
+{"description":"..."}`;
+  }
   return `You are writing the single Lead Marketing Description for one product on an REI vendor submission. REI's voice is warm, concrete, and benefit-driven.
 
 PRODUCT:
@@ -448,8 +523,8 @@ RULES:
 Reply with ONLY this JSON, no prose:
 {"description":"..."}`;
 }
-async function synthLeadDesc(apiKey,ew,facts,example,used){
-  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:buildLeadPrompt(ew,facts,example,used)}]})});
+async function synthLeadDesc(apiKey,ew,facts,example,used,style){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:500,messages:[{role:'user',content:buildLeadPrompt(ew,facts,example,used,style)}]})});
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||('API '+res.status));}
   const data=await res.json();
   const text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
@@ -527,22 +602,31 @@ async function run(){
     document.getElementById('progWrap').classList.add('visible');
     const example=exampleLeadDesc(tplWb,products[0].tab);
     const usedDescs=[], usedNorms=[];
-    for(let i=0;i<products.length;i++){
-      const p=products[i];
-      setStatus(`Writing marketing description ${i+1} of ${products.length}…`,'running');
-      document.getElementById('progBar').style.width=Math.round(i/products.length*100)+'%';
+    // One lead per REI style: group rows by REI Item # (blank Item # = its own group).
+    const styles=new Map();
+    for(const p of products){const k=(p.reiItem!=null&&String(p.reiItem).trim())?'rei:'+String(p.reiItem).trim():'__sku__'+p.vi;if(!styles.has(k))styles.set(k,[]);styles.get(k).push(p);}
+    const styleList=[...styles.values()];
+    const unit=styleList.length<products.length?' style':'';
+    const setLead=(grp,ci,cell)=>grp.forEach(p=>{p.cells[ci]=Object.assign({},cell);});
+    for(let i=0;i<styleList.length;i++){
+      const grp=styleList[i], p=grp[0], multi=grp.length>1;
+      setStatus(`Writing marketing description ${i+1} of ${styleList.length}${unit}…`,'running');
+      document.getElementById('progBar').style.width=Math.round(i/styleList.length*100)+'%';
       const leadCi=p.headers.find(([,f])=>f==='Lead Marketing Description');
       if(!leadCi)continue;
-      const ci=leadCi[0], facts=gatherFacts(p);
-      if(!facts.length){p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'no features to write from'};continue;}
+      const ci=leadCi[0], prof=multi?styleProfile(grp):null, facts=multi?prof.facts:gatherFacts(p);
+      if(!facts.length){setLead(grp,ci,{field:'Lead Marketing Description',value:null,src:'rev',note:'no features to write from'});continue;}
       try{
-        let desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs);
-        if(desc&&isNearDup(desc,usedNorms))desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs.concat(['(too similar to another product — rewrite so it is clearly different)']));
-        if(!desc){p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'AI returned nothing — write manually'};continue;}
-        const dup=isNearDup(desc,usedNorms);
-        p.cells[ci]={field:'Lead Marketing Description',value:desc,src:dup?'rev':'vend',note:dup?'AI-written but similar to another — edit':'AI-written from features — verify'};
+        let desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs,prof);
+        if(desc&&isNearDup(desc,usedNorms))desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs.concat(['(too similar to another product — rewrite so it is clearly different)']),prof);
+        if(multi&&desc&&leakedVariant(desc,prof).length)desc=await synthLeadDesc(apiKey,p.ew,facts,example,usedDescs.concat(['(your last draft mentioned '+leakedVariant(desc,prof).join(', ')+', which differs between versions — rewrite without it: "'+desc+'")']),prof);
+        if(!desc){setLead(grp,ci,{field:'Lead Marketing Description',value:null,src:'rev',note:'AI returned nothing — write manually'});continue;}
+        const dup=isNearDup(desc,usedNorms), leak=multi?leakedVariant(desc,prof):[];
+        const tag=multi?' (one lead for all '+grp.length+' rows of REI '+p.reiItem+')':'';
+        const note=leak.length?'AI-written but mentions '+leak.join(', ')+', which differs between rows — edit'+tag:dup?'AI-written but similar to another — edit'+tag:'AI-written from features — verify'+tag;
+        setLead(grp,ci,{field:'Lead Marketing Description',value:desc,src:(dup||leak.length)?'rev':'vend',note});
         usedDescs.push(desc); usedNorms.push(normBullet(desc));
-      }catch(e){setStatus('Marketing description error: '+e.message,'error');p.cells[ci]={field:'Lead Marketing Description',value:null,src:'rev',note:'AI error — write manually'};}
+      }catch(e){setStatus('Marketing description error: '+e.message,'error');setLead(grp,ci,{field:'Lead Marketing Description',value:null,src:'rev',note:'AI error — write manually'});}
     }
     document.getElementById('progBar').style.width='100%';
   }
